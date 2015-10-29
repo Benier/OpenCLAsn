@@ -6,6 +6,8 @@
 .user
 .userosscache
 .sln.docstates
+*.sln
+OpenCLAsn/*.sln
 
 # User-specific files (MonoDevelopXamarin Studio)
 .userprefs
