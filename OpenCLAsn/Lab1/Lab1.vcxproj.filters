@@ -27,4 +27,8 @@
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
+  <ItemGroup>
+    <Library Include="..\..\..\SDL2-devel-2.0.3-VC\SDL2-2.0.3\lib\x64\SDL2.lib" />
+    <Library Include="..\..\..\SDL2-devel-2.0.3-VC\SDL2-2.0.3\lib\x64\SDL2main.lib" />
+  </ItemGroup>
 </Project>

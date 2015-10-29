@@ -13,6 +13,7 @@
 #include <iostream>
 #include <fstream>
 #include <sstream>
+#include "SDL.h"
 
 #ifdef __APPLE__
 #include <sys/time.h>
@@ -22,6 +23,10 @@
 
 #include <Windows.h>
 
+#undef main
+
+const int SCREEN_WIDTH = 640;
+const int SCREEN_HEIGHT = 480;
 
 /* FILETIME of Jan 1 1970 00:00:00. */
 static const unsigned __int64 epoch = ((unsigned __int64)116444736000000000ULL);
@@ -340,12 +345,40 @@ void Cleanup(cl_context context, cl_command_queue commandQueue,
 
 }
 
-
-
+/**
+* Log an SDL error with some error message to the output stream of our choice
+* @param os The output stream to write the message to
+* @param msg The error message to write, format will be msg error: SDL_GetError()
+*/
+void logSDLError(std::ostream &os, const std::string &msg){
+	os << msg << " error: " << SDL_GetError() << std::endl;
+}
 
 //	main() for HelloWorld example
-int main(int argc, char** argv)
+int main(int argc, char* argv[])
 {
+	if (SDL_Init(SDL_INIT_EVERYTHING) != 0){
+		logSDLError(std::cout, "SDL_Init");
+		return 1;
+	}
+
+	SDL_Window *window = SDL_CreateWindow("Lesson 2", 100, 100, SCREEN_WIDTH,
+		SCREEN_HEIGHT, SDL_WINDOW_SHOWN);
+	if (window == nullptr){
+		logSDLError(std::cout, "CreateWindow");
+		SDL_Quit();
+		return 1;
+	}
+	
+	SDL_Renderer *renderer = SDL_CreateRenderer(window, -1,
+		SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+	if (renderer == nullptr){
+		logSDLError(std::cout, "CreateRenderer");
+		SDL_DestroyWindow(window);
+		SDL_Quit();
+		return 1;
+	}
+
 	array_size = ARRAY_SIZE;
 	if (argc > 1)
 		array_size = atoi(argv[1]);
@@ -488,6 +521,24 @@ int main(int argc, char** argv)
 	delete[] b;
 	delete[] a;
 	delete[] result;
+
+	SDL_Event e;
+	bool quit = false;
+	while (!quit){
+		while (SDL_PollEvent(&e)){
+			if (e.type == SDL_QUIT){
+				quit = true;
+			}
+		}
+
+		//Render the scene
+		SDL_RenderClear(renderer);
+		SDL_RenderPresent(renderer);
+	}
+
+	SDL_DestroyRenderer(renderer);
+	SDL_DestroyWindow(window);
+	SDL_Quit();
 
 	return 0;
 }
