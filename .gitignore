@@ -11,6 +11,10 @@
 .opensdf
 *.sln
 OpenCLAsn/*.sln
+OpenCLAsn/Lab1/*.vcxproj.filters
+OpenCLAsn/Lab1/*.vcxproj
+OpenCLAsn/*.sdf
+OpenCLAsn/*.opensdf
 
 # User-specific files (MonoDevelopXamarin Studio)
 .userprefs
