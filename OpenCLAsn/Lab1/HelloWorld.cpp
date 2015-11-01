@@ -59,11 +59,9 @@ gettimeofday(struct timeval * tp, struct timezone * tzp)
 
 #endif
 
-
 //  Constants
 const int ARRAY_SIZE = 10;
 int array_size = 0;
-
 
 // Helper class for timing calculations
 class CTiming
@@ -88,9 +86,6 @@ private:
 
 };
 
-
-
-
 // Function to check return value of OpenCL calls and
 // output custom error message to cerr
 bool CheckOpenCLError(cl_int errNum, const char *errMsg)
@@ -102,9 +97,6 @@ bool CheckOpenCLError(cl_int errNum, const char *errMsg)
 	}
 	return true;
 }
-
-
-
 
 //  Create an OpenCL context on the first available platform using
 //  either a GPU or CPU depending on what is available.
@@ -151,8 +143,6 @@ cl_context CreateContext()
 
 	return context;
 }
-
-
 
 //  Create a command queue on the first device available on the context
 cl_command_queue CreateCommandQueue(cl_context context, cl_device_id *device)
@@ -251,8 +241,6 @@ cl_command_queue CreateCommandQueue(cl_context context, cl_device_id *device)
 	return commandQueue;
 }
 
-
-
 //  Create an OpenCL program from the kernel source file
 cl_program CreateProgram(cl_context context, cl_device_id device, const char* fileName)
 {
@@ -297,8 +285,6 @@ cl_program CreateProgram(cl_context context, cl_device_id device, const char* fi
 	return program;
 }
 
-
-
 //  Create memory objects used as the arguments to the kernel
 //  The kernel takes three arguments: result (output), a (input), and b (input)
 bool CreateMemObjects(cl_context context, cl_mem memObjects[3],
@@ -319,8 +305,6 @@ bool CreateMemObjects(cl_context context, cl_mem memObjects[3],
 
 	return true;
 }
-
-
 
 //  Cleanup any created OpenCL resources
 void Cleanup(cl_context context, cl_command_queue commandQueue,
@@ -352,6 +336,39 @@ void Cleanup(cl_context context, cl_command_queue commandQueue,
 */
 void logSDLError(std::ostream &os, const std::string &msg){
 	os << msg << " error: " << SDL_GetError() << std::endl;
+}
+
+SDL_Texture* loadTexture(const std::string &file, SDL_Renderer *ren)
+{
+	SDL_Texture *texture = nullptr;
+	SDL_Surface *loadedImage = SDL_LoadBMP(file.c_str());
+
+	if (loadedImage != nullptr)
+	{
+		texture = SDL_CreateTextureFromSurface(ren, loadedImage);
+		SDL_FreeSurface(loadedImage);
+
+		if (texture == nullptr)
+		{
+			logSDLError(std::cout, "CreateTextureFromSurface");
+		}
+	}
+	else
+	{
+		logSDLError(std::cout, "LoadBMP");
+	}
+
+	return texture;
+}
+
+void renderTexture(SDL_Texture *tex, SDL_Renderer *ren, int x, int y)
+{
+	SDL_Rect dst;
+	dst.x = x;
+	dst.y = y;
+
+	SDL_QueryTexture(tex, NULL, NULL, &dst.w, &dst.h);
+	SDL_RenderCopy(ren, tex, NULL, &dst);
 }
 
 //	main() for HelloWorld example
@@ -522,6 +539,8 @@ int main(int argc, char* argv[])
 	delete[] a;
 	delete[] result;
 
+	SDL_Texture *image = loadTexture("background.bmp", renderer);
+
 	SDL_Event e;
 	bool quit = false;
 	while (!quit){
@@ -533,6 +552,9 @@ int main(int argc, char* argv[])
 
 		//Render the scene
 		SDL_RenderClear(renderer);
+
+		renderTexture(image, renderer, 0, 0);
+
 		SDL_RenderPresent(renderer);
 	}
 
