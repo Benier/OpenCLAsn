@@ -20,7 +20,6 @@
 #include <OpenCL/cl.h>
 #else
 #include <CL/cl.h>
-
 #include <Windows.h>
 
 #undef main
@@ -338,29 +337,6 @@ void logSDLError(std::ostream &os, const std::string &msg){
 	os << msg << " error: " << SDL_GetError() << std::endl;
 }
 
-SDL_Texture* loadTexture(const std::string &file, SDL_Renderer *ren)
-{
-	SDL_Texture *texture = nullptr;
-	SDL_Surface *loadedImage = SDL_LoadBMP(file.c_str());
-
-	if (loadedImage != nullptr)
-	{
-		texture = SDL_CreateTextureFromSurface(ren, loadedImage);
-		SDL_FreeSurface(loadedImage);
-
-		if (texture == nullptr)
-		{
-			logSDLError(std::cout, "CreateTextureFromSurface");
-		}
-	}
-	else
-	{
-		logSDLError(std::cout, "LoadBMP");
-	}
-
-	return texture;
-}
-
 void renderTexture(SDL_Texture *tex, SDL_Renderer *ren, int x, int y)
 {
 	SDL_Rect dst;
@@ -405,8 +381,8 @@ int main(int argc, char* argv[])
 	cl_program program = 0;
 	cl_device_id device = 0;
 	cl_kernel kernel = 0;
-	cl_mem memObjects[3] = { 0, 0, 0 };
 	cl_int errNum;
+	cl_mem* memObjects;
 
 	// Create an OpenCL context on first available platform
 	context = CreateContext();
@@ -426,7 +402,7 @@ int main(int argc, char* argv[])
 	}
 
 	// Create OpenCL program from HelloWorld.cl kernel source
-	program = CreateProgram(context, device, "StudentGrades.cl");
+	program = CreateProgram(context, device, "test.cl");
 	if (program == NULL)
 	{
 		Cleanup(context, commandQueue, program, kernel, memObjects);
@@ -434,7 +410,7 @@ int main(int argc, char* argv[])
 	}
 
 	// Create OpenCL kernel
-	kernel = clCreateKernel(program, "grades_kernel", NULL);
+	kernel = clCreateKernel(program, "test", NULL);
 	if (kernel == NULL)
 	{
 		std::cerr << "Failed to create kernel" << std::endl;
@@ -442,10 +418,48 @@ int main(int argc, char* argv[])
 		return 1;
 	}
 
+	// image setup
+	const std::string file = "background.bmp";
+	SDL_Texture *texture = nullptr;
+	SDL_Surface *loadedImage = SDL_LoadBMP(file.c_str());
+	loadedImage = SDL_ConvertSurface(loadedImage, SDL_GetWindowSurface(window)->format, NULL); // get the right format
+
+	void* pixels = nullptr;// malloc(sizeof(cl_float) * loadedImage->w * loadedImage->h);
+
+	texture = SDL_CreateTexture(renderer, SDL_GetWindowPixelFormat(window), SDL_TEXTUREACCESS_STREAMING, loadedImage->w, loadedImage->h);
+
+	SDL_LockTexture(texture, NULL, &pixels, &loadedImage->pitch);
+	memcpy(pixels, loadedImage->pixels, loadedImage->pitch * loadedImage->h);
+	SDL_UnlockTexture(texture);
+
+	cl_image_format format;
+	format.image_channel_order = CL_RGBA;
+	format.image_channel_data_type = CL_UNSIGNED_INT8;
+
+	cl_mem inputImage = clCreateImage2D(context,
+		CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
+		&format,
+		loadedImage->w, loadedImage->h,
+		0,
+		pixels,
+		NULL);
+
+	//cl_mem inputImage = clCreateBuffer(context, CL_MEM_READ_WRITE,
+		//loadedImage->pitch * loadedImage->h, pixels, NULL);
+
+	cl_mem outputBuffer = clCreateBuffer(context, CL_MEM_READ_WRITE,
+		loadedImage->pitch * loadedImage->h, NULL, NULL);
+
+	clSetKernelArg(kernel, 0, sizeof(cl_mem), &inputImage);
+	clSetKernelArg(kernel, 1, sizeof(cl_mem), &outputBuffer);
+
+	size_t globalWorkSize[2] = { loadedImage->w * loadedImage->h };
+	size_t localWorkSize[2] = { 1 };
+
 	// Create memory objects that will be used as arguments to
 	// kernel.  First create host memory arrays that will be
 	// used to store the arguments to the kernel
-	float *result = new float[array_size];
+	/*float *result = new float[array_size];
 	float *a = new float[array_size];
 	float *b = new float[array_size];
 	for (int i = 0; i < array_size; i++)
@@ -523,6 +537,7 @@ int main(int argc, char* argv[])
 	}
 
 	timer.End();
+	
 	if (timer.Diff(seconds, useconds))
 		std::cerr << "Warning: timer returned negative difference!" << std::endl;
 	std::cout << "OpenCL ran in " << seconds << "." << useconds << " seconds" << std::endl << std::endl;
@@ -535,11 +550,10 @@ int main(int argc, char* argv[])
 	std::cout << std::endl << std::endl;
 	std::cout << "Executed program succesfully." << std::endl;
 	Cleanup(context, commandQueue, program, kernel, memObjects);
+
 	delete[] b;
 	delete[] a;
-	delete[] result;
-
-	SDL_Texture *image = loadTexture("background.bmp", renderer);
+	delete[] result;*/
 
 	SDL_Event e;
 	bool quit = false;
@@ -550,14 +564,27 @@ int main(int argc, char* argv[])
 			}
 		}
 
+		SDL_LockTexture(texture, NULL, &pixels, &loadedImage->pitch);
+
+		memcpy(pixels, loadedImage->pixels, loadedImage->pitch * loadedImage->h);
+
+		clEnqueueNDRangeKernel(commandQueue, kernel, 1, NULL,
+			globalWorkSize, localWorkSize,
+			0, NULL, NULL);
+
+		clEnqueueReadBuffer(commandQueue, outputBuffer, CL_TRUE,
+			0, loadedImage->pitch * loadedImage->h, pixels,
+			0, NULL, NULL);
+
+		SDL_UnlockTexture(texture);
+
 		//Render the scene
 		SDL_RenderClear(renderer);
-
-		renderTexture(image, renderer, 0, 0);
-
+		renderTexture(texture, renderer, 0, 0);
 		SDL_RenderPresent(renderer);
 	}
 
+	SDL_FreeSurface(loadedImage);
 	SDL_DestroyRenderer(renderer);
 	SDL_DestroyWindow(window);
 	SDL_Quit();
