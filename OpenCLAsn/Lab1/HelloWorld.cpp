@@ -62,6 +62,58 @@ gettimeofday(struct timeval * tp, struct timezone * tzp)
 const int ARRAY_SIZE = 10;
 int array_size = 0;
 
+char* CLErrorToString(cl_int error) {
+	switch (error) {
+	case CL_SUCCESS:                            return "Success!";
+	case CL_DEVICE_NOT_FOUND:                   return "Device not found.";
+	case CL_DEVICE_NOT_AVAILABLE:               return "Device not available";
+	case CL_COMPILER_NOT_AVAILABLE:             return "Compiler not available";
+	case CL_MEM_OBJECT_ALLOCATION_FAILURE:      return "Memory object allocation failure";
+	case CL_OUT_OF_RESOURCES:                   return "Out of resources";
+	case CL_OUT_OF_HOST_MEMORY:                 return "Out of host memory";
+	case CL_PROFILING_INFO_NOT_AVAILABLE:       return "Profiling information not available";
+	case CL_MEM_COPY_OVERLAP:                   return "Memory copy overlap";
+	case CL_IMAGE_FORMAT_MISMATCH:              return "Image format mismatch";
+	case CL_IMAGE_FORMAT_NOT_SUPPORTED:         return "Image format not supported";
+	case CL_BUILD_PROGRAM_FAILURE:              return "Program build failure";
+	case CL_MAP_FAILURE:                        return "Map failure";
+	case CL_INVALID_VALUE:                      return "Invalid value";
+	case CL_INVALID_DEVICE_TYPE:                return "Invalid device type";
+	case CL_INVALID_PLATFORM:                   return "Invalid platform";
+	case CL_INVALID_DEVICE:                     return "Invalid device";
+	case CL_INVALID_CONTEXT:                    return "Invalid context";
+	case CL_INVALID_QUEUE_PROPERTIES:           return "Invalid queue properties";
+	case CL_INVALID_COMMAND_QUEUE:              return "Invalid command queue";
+	case CL_INVALID_HOST_PTR:                   return "Invalid host pointer";
+	case CL_INVALID_MEM_OBJECT:                 return "Invalid memory object";
+	case CL_INVALID_IMAGE_FORMAT_DESCRIPTOR:    return "Invalid image format descriptor";
+	case CL_INVALID_IMAGE_SIZE:                 return "Invalid image size";
+	case CL_INVALID_SAMPLER:                    return "Invalid sampler";
+	case CL_INVALID_BINARY:                     return "Invalid binary";
+	case CL_INVALID_BUILD_OPTIONS:              return "Invalid build options";
+	case CL_INVALID_PROGRAM:                    return "Invalid program";
+	case CL_INVALID_PROGRAM_EXECUTABLE:         return "Invalid program executable";
+	case CL_INVALID_KERNEL_NAME:                return "Invalid kernel name";
+	case CL_INVALID_KERNEL_DEFINITION:          return "Invalid kernel definition";
+	case CL_INVALID_KERNEL:                     return "Invalid kernel";
+	case CL_INVALID_ARG_INDEX:                  return "Invalid argument index";
+	case CL_INVALID_ARG_VALUE:                  return "Invalid argument value";
+	case CL_INVALID_ARG_SIZE:                   return "Invalid argument size";
+	case CL_INVALID_KERNEL_ARGS:                return "Invalid kernel arguments";
+	case CL_INVALID_WORK_DIMENSION:             return "Invalid work dimension";
+	case CL_INVALID_WORK_GROUP_SIZE:            return "Invalid work group size";
+	case CL_INVALID_WORK_ITEM_SIZE:             return "Invalid work item size";
+	case CL_INVALID_GLOBAL_OFFSET:              return "Invalid global offset";
+	case CL_INVALID_EVENT_WAIT_LIST:            return "Invalid event wait list";
+	case CL_INVALID_EVENT:                      return "Invalid event";
+	case CL_INVALID_OPERATION:                  return "Invalid operation";
+	case CL_INVALID_GL_OBJECT:                  return "Invalid OpenGL object";
+	case CL_INVALID_BUFFER_SIZE:                return "Invalid buffer size";
+	case CL_INVALID_MIP_LEVEL:                  return "Invalid mip-map level";
+	default: return "Unknown";
+	}
+}
+
 // Helper class for timing calculations
 class CTiming
 {
@@ -355,7 +407,7 @@ int main(int argc, char* argv[])
 		return 1;
 	}
 
-	SDL_Window *window = SDL_CreateWindow("Lesson 2", 100, 100, SCREEN_WIDTH,
+	SDL_Window *window = SDL_CreateWindow("Assignment 3", 100, 100, SCREEN_WIDTH,
 		SCREEN_HEIGHT, SDL_WINDOW_SHOWN);
 	if (window == nullptr){
 		logSDLError(std::cout, "CreateWindow");
@@ -436,16 +488,16 @@ int main(int argc, char* argv[])
 	format.image_channel_order = CL_RGBA;
 	format.image_channel_data_type = CL_UNSIGNED_INT8;
 
-	cl_mem inputImage = clCreateImage2D(context,
+	/*cl_mem inputImage = clCreateImage2D(context,
 		CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
 		&format,
 		loadedImage->w, loadedImage->h,
 		0,
 		pixels,
-		NULL);
+		NULL);*/
 
-	//cl_mem inputImage = clCreateBuffer(context, CL_MEM_READ_WRITE,
-		//loadedImage->pitch * loadedImage->h, pixels, NULL);
+	cl_mem inputImage = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
+		loadedImage->pitch * loadedImage->h, pixels, NULL);
 
 	cl_mem outputBuffer = clCreateBuffer(context, CL_MEM_READ_WRITE,
 		loadedImage->pitch * loadedImage->h, NULL, NULL);
@@ -454,106 +506,9 @@ int main(int argc, char* argv[])
 	clSetKernelArg(kernel, 1, sizeof(cl_mem), &outputBuffer);
 
 	size_t globalWorkSize[2] = { loadedImage->w * loadedImage->h };
-	size_t localWorkSize[2] = { 1 };
+	size_t localWorkSize[2] = { 100 };
 
-	// Create memory objects that will be used as arguments to
-	// kernel.  First create host memory arrays that will be
-	// used to store the arguments to the kernel
-	/*float *result = new float[array_size];
-	float *a = new float[array_size];
-	float *b = new float[array_size];
-	for (int i = 0; i < array_size; i++)
-	{
-		a[i] = (float)i;
-		b[i] = (float)(i * 2);
-	}
-
-	CTiming timer;
-	int seconds, useconds;
-	timer.Start();
-	for (int i = 0; i < array_size; i++)
-	{
-		result[i] = a[i] + b[i];
-	}
-	timer.End();
-	if (timer.Diff(seconds, useconds))
-		std::cerr << "Warning: timer returned negative difference!" << std::endl;
-	std::cout << "Serially ran in " << seconds << "." << useconds << " seconds" << std::endl << std::endl;
-
-	if (!CreateMemObjects(context, memObjects, a, b))
-	{
-		Cleanup(context, commandQueue, program, kernel, memObjects);
-		delete[] b;
-		delete[] a;
-		delete[] result;
-		return 1;
-	}
-
-	// Set the kernel arguments (result, a, b)
-	errNum = clSetKernelArg(kernel, 0, sizeof(cl_mem), &memObjects[0]);
-	errNum |= clSetKernelArg(kernel, 1, sizeof(cl_mem), &memObjects[1]);
-	errNum |= clSetKernelArg(kernel, 2, sizeof(cl_mem), &memObjects[2]);
-	if (errNum != CL_SUCCESS)
-	{
-		std::cerr << "Error setting kernel arguments." << std::endl;
-		Cleanup(context, commandQueue, program, kernel, memObjects);
-		delete[] b;
-		delete[] a;
-		delete[] result;
-		return 1;
-	}
-
-	size_t globalWorkSize[2] = { array_size };
-	size_t localWorkSize[2] = { 1 };
-
-	timer.Start();
-
-	// Queue the kernel up for execution across the array
-	errNum = clEnqueueNDRangeKernel(commandQueue, kernel, 1, NULL,
-		globalWorkSize, localWorkSize,
-		0, NULL, NULL);
-	if (errNum != CL_SUCCESS)
-	{
-		std::cerr << "Error queuing kernel for execution." << std::endl;
-		Cleanup(context, commandQueue, program, kernel, memObjects);
-		delete[] b;
-		delete[] a;
-		delete[] result;
-		return 1;
-	}
-
-	// Read the output buffer back to the Host
-	errNum = clEnqueueReadBuffer(commandQueue, memObjects[2], CL_TRUE,
-		0, array_size * sizeof(float), result,
-		0, NULL, NULL);
-	if (errNum != CL_SUCCESS)
-	{
-		std::cerr << "Error reading result buffer." << std::endl;
-		Cleanup(context, commandQueue, program, kernel, memObjects);
-		delete[] b;
-		delete[] a;
-		delete[] result;
-		return 1;
-	}
-
-	timer.End();
-	
-	if (timer.Diff(seconds, useconds))
-		std::cerr << "Warning: timer returned negative difference!" << std::endl;
-	std::cout << "OpenCL ran in " << seconds << "." << useconds << " seconds" << std::endl << std::endl;
-
-	// Output (some of) the result buffer
-	for (int i = 0; i < ((array_size>100) ? 100 : array_size); i++)
-	{
-		std::cout << result[i] << " ";
-	}
-	std::cout << std::endl << std::endl;
-	std::cout << "Executed program succesfully." << std::endl;
-	Cleanup(context, commandQueue, program, kernel, memObjects);
-
-	delete[] b;
-	delete[] a;
-	delete[] result;*/
+	//= read_imageui(image, sampler, pos)
 
 	SDL_Event e;
 	bool quit = false;
@@ -566,15 +521,21 @@ int main(int argc, char* argv[])
 
 		SDL_LockTexture(texture, NULL, &pixels, &loadedImage->pitch);
 
-		memcpy(pixels, loadedImage->pixels, loadedImage->pitch * loadedImage->h);
-
-		clEnqueueNDRangeKernel(commandQueue, kernel, 1, NULL,
+		cl_int err = clEnqueueNDRangeKernel(commandQueue, kernel, 1, NULL,
 			globalWorkSize, localWorkSize,
 			0, NULL, NULL);
 
-		clEnqueueReadBuffer(commandQueue, outputBuffer, CL_TRUE,
+		if (err != CL_SUCCESS)
+			break;
+
+		err = clEnqueueReadBuffer(commandQueue, outputBuffer, CL_TRUE,
 			0, loadedImage->pitch * loadedImage->h, pixels,
 			0, NULL, NULL);
+		
+		if (err != CL_SUCCESS) {
+			CLErrorToString(err);
+			break;
+		}
 
 		SDL_UnlockTexture(texture);
 
