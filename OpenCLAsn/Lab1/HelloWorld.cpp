@@ -476,7 +476,7 @@ int main(int argc, char* argv[])
 	SDL_Surface *loadedImage = SDL_LoadBMP(file.c_str());
 	loadedImage = SDL_ConvertSurface(loadedImage, SDL_GetWindowSurface(window)->format, NULL); // get the right format
 
-	void* pixels = nullptr;// malloc(sizeof(cl_float) * loadedImage->w * loadedImage->h);
+	void* pixels = nullptr;
 
 	texture = SDL_CreateTexture(renderer, SDL_GetWindowPixelFormat(window), SDL_TEXTUREACCESS_STREAMING, loadedImage->w, loadedImage->h);
 
@@ -484,11 +484,11 @@ int main(int argc, char* argv[])
 	memcpy(pixels, loadedImage->pixels, loadedImage->pitch * loadedImage->h);
 	SDL_UnlockTexture(texture);
 
-	cl_image_format format;
+	/*cl_image_format format;
 	format.image_channel_order = CL_RGBA;
 	format.image_channel_data_type = CL_UNSIGNED_INT8;
 
-	/*cl_mem inputImage = clCreateImage2D(context,
+	cl_mem inputImage = clCreateImage2D(context,
 		CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
 		&format,
 		loadedImage->w, loadedImage->h,
@@ -505,10 +505,8 @@ int main(int argc, char* argv[])
 	clSetKernelArg(kernel, 0, sizeof(cl_mem), &inputImage);
 	clSetKernelArg(kernel, 1, sizeof(cl_mem), &outputBuffer);
 
-	size_t globalWorkSize[2] = { loadedImage->w * loadedImage->h };
-	size_t localWorkSize[2] = { 100 };
-
-	//= read_imageui(image, sampler, pos)
+	size_t globalWorkSize[2] = { loadedImage->w, loadedImage->h };
+	size_t localWorkSize[2] = { 16, 16 };
 
 	SDL_Event e;
 	bool quit = false;
@@ -521,12 +519,16 @@ int main(int argc, char* argv[])
 
 		SDL_LockTexture(texture, NULL, &pixels, &loadedImage->pitch);
 
-		cl_int err = clEnqueueNDRangeKernel(commandQueue, kernel, 1, NULL,
+		cl_int err = clEnqueueNDRangeKernel(commandQueue, kernel, 2, NULL,
 			globalWorkSize, localWorkSize,
 			0, NULL, NULL);
 
 		if (err != CL_SUCCESS)
+		{
+			CLErrorToString(err);
 			break;
+		}
+			
 
 		err = clEnqueueReadBuffer(commandQueue, outputBuffer, CL_TRUE,
 			0, loadedImage->pitch * loadedImage->h, pixels,

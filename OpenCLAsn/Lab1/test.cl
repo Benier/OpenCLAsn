@@ -6,9 +6,7 @@ __kernel void test(
 	) {
 
 	const int2 pos = { get_global_id(0), get_global_id(1) };
+	int index = pos.x + pos.y*get_global_size(0);
 
-	output[pos.x + pos.y*get_global_size(0)].x = 0;
-	output[pos.x + pos.y*get_global_size(0)].y = 150;
-	output[pos.x + pos.y*get_global_size(0)].z = 0;
-	output[pos.x + pos.y*get_global_size(0)].w = 150;
+	//output[pos.x + pos.y*get_global_size(0)] = image[pos.x + pos.y*get_global_size(0)];
 }
