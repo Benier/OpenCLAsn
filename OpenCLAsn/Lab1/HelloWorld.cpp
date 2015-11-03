@@ -471,7 +471,7 @@ int main(int argc, char* argv[])
 	}
 
 	// image setup
-	const std::string file = "background2.bmp";
+	const std::string file = "background3.bmp";
 	SDL_Texture *texture = nullptr;
 	SDL_Surface *loadedImage = SDL_LoadBMP(file.c_str());
 	loadedImage = SDL_ConvertSurface(loadedImage, SDL_GetWindowSurface(window)->format, NULL); // get the right format
@@ -502,8 +502,11 @@ int main(int argc, char* argv[])
 	cl_mem outputBuffer = clCreateBuffer(context, CL_MEM_READ_WRITE,
 		loadedImage->pitch * loadedImage->h, NULL, NULL);
 
+	cl_float time = 0;
+
 	clSetKernelArg(kernel, 0, sizeof(cl_mem), &inputImage);
 	clSetKernelArg(kernel, 1, sizeof(cl_mem), &outputBuffer);
+	clSetKernelArg(kernel, 2, sizeof(cl_float), &time);
 
 	size_t globalWorkSize[2] = { loadedImage->w, loadedImage->h };
 	size_t localWorkSize[2] = { 16, 16 };
@@ -517,6 +520,8 @@ int main(int argc, char* argv[])
 			}
 		}
 
+		time = SDL_GetTicks() / 1000.0f;
+		clSetKernelArg(kernel, 2, sizeof(cl_float), &time);
 		SDL_LockTexture(texture, NULL, &pixels, &loadedImage->pitch);
 
 		cl_int err = clEnqueueNDRangeKernel(commandQueue, kernel, 2, NULL,
