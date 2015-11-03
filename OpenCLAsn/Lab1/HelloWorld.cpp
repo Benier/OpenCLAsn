@@ -471,7 +471,7 @@ int main(int argc, char* argv[])
 	}
 
 	// image setup
-	const std::string file = "background.bmp";
+	const std::string file = "background2.bmp";
 	SDL_Texture *texture = nullptr;
 	SDL_Surface *loadedImage = SDL_LoadBMP(file.c_str());
 	loadedImage = SDL_ConvertSurface(loadedImage, SDL_GetWindowSurface(window)->format, NULL); // get the right format
