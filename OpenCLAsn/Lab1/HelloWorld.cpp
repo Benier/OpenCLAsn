@@ -373,6 +373,90 @@ void renderTexture(SDL_Texture *tex, SDL_Renderer *ren, int x, int y)
 	SDL_RenderCopy(ren, tex, NULL, &dst);
 }
 
+void RunSerialShader(SDL_Surface* loadedImage, SDL_Texture* texture, void* pixels, void* buffer, const float time)
+{
+	SDL_LockTexture(texture, NULL, &pixels, &loadedImage->pitch);
+
+	memcpy(buffer, pixels, loadedImage->pitch * loadedImage->h);
+	cl_char4 * output = (cl_char4 *)pixels;
+	cl_char4 * input = (cl_char4 *)buffer;
+
+	for (int x = 0; x < loadedImage->w; x++)
+	{
+		for (int y = 0; y < loadedImage->h; y++)
+		{
+			
+			float resX = 1.0f;
+			float resY = 1.0f;
+
+			float fragCoordX = x / 256.0f;
+			float fragCoordY = y / 256.0f;
+
+			float pX = 2.0f * fragCoordX / resX - 1.0f;
+			float pY = 2.0f * fragCoordY / resY - 1.0f;
+
+			float ratioX = resX / resY;
+			float ratioY = 1.0f;
+			pX = pX * ratioX;
+			pY = pY * ratioY;
+
+			float uvX = atan(pY / pX) * 1.0f / 3.14f;
+			float uvY = 1.0f / sqrt((pX * pX) + (pY * pY));
+			float scaleX = 2.0f;
+			float scaleY = 1.0f;
+
+			uvX = uvX * scaleX;
+			uvY = uvY * scaleY;
+
+			uvX += sin(2.0f * uvY + time * 0.5f);
+
+			uvX = min(255.0f, uvX * 128.0f);
+			uvY = min(255.0f, uvY * 128.0f);
+
+			output[x + (y * loadedImage->w)] = input[((int)uvX) + ((int)uvY) * loadedImage->w];
+		}
+	}
+
+	SDL_UnlockTexture(texture);
+}
+
+void RunOpenCL(cl_kernel kernel,
+				cl_command_queue commandQueue,
+				size_t* globalWorkSize,
+				size_t* localWorkSize,
+				cl_mem outputBuffer,
+				SDL_Surface* loadedImage, 
+				SDL_Texture *texture, 
+				void* pixels, 
+				const float time) {
+
+	clSetKernelArg(kernel, 2, sizeof(cl_float), &time);
+
+	SDL_LockTexture(texture, NULL, &pixels, &loadedImage->pitch);
+
+	cl_int err = clEnqueueNDRangeKernel(commandQueue, kernel, 2, NULL,
+		globalWorkSize, localWorkSize,
+		0, NULL, NULL);
+
+	if (err != CL_SUCCESS)
+	{
+		CLErrorToString(err);
+		return;
+	}
+
+
+	err = clEnqueueReadBuffer(commandQueue, outputBuffer, CL_TRUE,
+		0, loadedImage->pitch * loadedImage->h, pixels,
+		0, NULL, NULL);
+
+	if (err != CL_SUCCESS) {
+		CLErrorToString(err);
+		return;
+	}
+
+	SDL_UnlockTexture(texture);
+}
+
 //	main() for HelloWorld example
 int main(int argc, char* argv[])
 {
@@ -449,6 +533,7 @@ int main(int argc, char* argv[])
 	loadedImage = SDL_ConvertSurface(loadedImage, SDL_GetWindowSurface(window)->format, NULL); // get the right format
 
 	void* pixels = nullptr;
+	void* buffer = malloc(loadedImage->pitch * loadedImage->h);
 
 	texture = SDL_CreateTexture(renderer, SDL_GetWindowPixelFormat(window), SDL_TEXTUREACCESS_STREAMING, loadedImage->w, loadedImage->h);
 
@@ -474,7 +559,10 @@ int main(int argc, char* argv[])
 	CTiming timer;
 	int seconds, useconds;
 	int frames = 0;
-	char array[42];
+	char array[64];
+
+	bool openCLRunning = true;
+	char* type = openCLRunning ? "OpenCL" : "Serial";
 
 	SDL_Event e;
 	bool quit = false;
@@ -487,39 +575,16 @@ int main(int argc, char* argv[])
 		
 		time = SDL_GetTicks() / 1000.0f;
 		float fps = frames / time;
-		sprintf(array, "%s%f", "Assignment 3 - OpenCL, Average FPS: ", fps);
+		sprintf(array, "%s%s%s%f", "Assignment 3 - ", type, " Average FPS: ", fps);
 		SDL_SetWindowTitle(window, array);
 
-		clSetKernelArg(kernel, 2, sizeof(cl_float), &time);
-
 		timer.Start();
-		SDL_LockTexture(texture, NULL, &pixels, &loadedImage->pitch);
-
-		cl_int err = clEnqueueNDRangeKernel(commandQueue, kernel, 2, NULL,
-			globalWorkSize, localWorkSize,
-			0, NULL, NULL);
-
-		if (err != CL_SUCCESS)
-		{
-			CLErrorToString(err);
-			break;
-		}
-			
-
-		err = clEnqueueReadBuffer(commandQueue, outputBuffer, CL_TRUE,
-			0, loadedImage->pitch * loadedImage->h, pixels,
-			0, NULL, NULL);
-		
-		if (err != CL_SUCCESS) {
-			CLErrorToString(err);
-			break;
-		}
-
-		SDL_UnlockTexture(texture);
+		if (openCLRunning) RunOpenCL(kernel, commandQueue, globalWorkSize, localWorkSize, outputBuffer, loadedImage, texture, pixels, time);
+		else RunSerialShader(loadedImage, texture, pixels, buffer, time);
 		timer.End();
 		if (timer.Diff(seconds, useconds))
 			std::cerr << "Warning: timer returned negative difference!" << std::endl;
-		std::cout << "OpenCL ran in " << seconds << "." << useconds << " seconds" << std::endl << std::endl;
+		std::cout << type << " ran in " << seconds << "." << useconds << " seconds" << std::endl << std::endl;
 
 		//Render the scene
 		SDL_RenderClear(renderer);
@@ -532,6 +597,7 @@ int main(int argc, char* argv[])
 	SDL_DestroyRenderer(renderer);
 	SDL_DestroyWindow(window);
 	SDL_Quit();
+	free(buffer);
 
 	return 0;
 }

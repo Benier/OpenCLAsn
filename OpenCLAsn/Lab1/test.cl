@@ -12,7 +12,7 @@ __kernel void test(
 
 	//map the xy pixel co-ordinates to be between -1.0 to +1.0 on x and y axes
 	//and alter the x value according to the aspect ratio so it isn't 'stretched'
-	float2 p = { 2.0f * fragCoord.xy / resolution.xy - 1.0f };
+	float2 p =  2.0f * fragCoord.xy / resolution.xy - 1.0f ;
 	float2 ratio = { resolution.x / resolution.y, 1.0f };
 	p = p * ratio;
 
@@ -31,6 +31,6 @@ __kernel void test(
 	uv.x = min(255.0f, uv.x * 128.0f);
 	uv.y = min(255.0f, uv.y * 128.0f);
 
-	uchar4 c = image[((int)(uv.x)) + (((int)(uv.y))*get_global_size(0))];
+	uchar4 c = image[((int)(uv.x)) + (((int)(uv.y))*get_global_size(0))]; 
 	output[(int)position.x + ((int)position.y)*get_global_size(0)] = c;
 }
