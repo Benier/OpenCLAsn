@@ -58,10 +58,6 @@ gettimeofday(struct timeval * tp, struct timezone * tzp)
 
 #endif
 
-//  Constants
-const int ARRAY_SIZE = 10;
-int array_size = 0;
-
 char* CLErrorToString(cl_int error) {
 	switch (error) {
 	case CL_SUCCESS:                            return "Success!";
@@ -336,27 +332,6 @@ cl_program CreateProgram(cl_context context, cl_device_id device, const char* fi
 	return program;
 }
 
-//  Create memory objects used as the arguments to the kernel
-//  The kernel takes three arguments: result (output), a (input), and b (input)
-bool CreateMemObjects(cl_context context, cl_mem memObjects[3],
-	float *a, float *b)
-{
-	memObjects[0] = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
-		sizeof(float)* array_size, a, NULL);
-	memObjects[1] = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
-		sizeof(float)* array_size, b, NULL);
-	memObjects[2] = clCreateBuffer(context, CL_MEM_READ_WRITE,
-		sizeof(float)* array_size, NULL, NULL);
-
-	if (memObjects[0] == NULL || memObjects[1] == NULL || memObjects[2] == NULL)
-	{
-		std::cerr << "Error creating memory objects." << std::endl;
-		return false;
-	}
-
-	return true;
-}
-
 //  Cleanup any created OpenCL resources
 void Cleanup(cl_context context, cl_command_queue commandQueue,
 	cl_program program, cl_kernel kernel, cl_mem memObjects[3])
@@ -377,7 +352,6 @@ void Cleanup(cl_context context, cl_command_queue commandQueue,
 
 	if (context != 0)
 		clReleaseContext(context);
-
 }
 
 /**
@@ -424,10 +398,6 @@ int main(int argc, char* argv[])
 		return 1;
 	}
 
-	array_size = ARRAY_SIZE;
-	if (argc > 1)
-		array_size = atoi(argv[1]);
-
 	cl_context context = 0;
 	cl_command_queue commandQueue = 0;
 	cl_program program = 0;
@@ -435,6 +405,8 @@ int main(int argc, char* argv[])
 	cl_kernel kernel = 0;
 	cl_int errNum;
 	cl_mem* memObjects;
+
+
 
 	// Create an OpenCL context on first available platform
 	context = CreateContext();
@@ -484,18 +456,6 @@ int main(int argc, char* argv[])
 	memcpy(pixels, loadedImage->pixels, loadedImage->pitch * loadedImage->h);
 	SDL_UnlockTexture(texture);
 
-	/*cl_image_format format;
-	format.image_channel_order = CL_RGBA;
-	format.image_channel_data_type = CL_UNSIGNED_INT8;
-
-	cl_mem inputImage = clCreateImage2D(context,
-		CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
-		&format,
-		loadedImage->w, loadedImage->h,
-		0,
-		pixels,
-		NULL);*/
-
 	cl_mem inputImage = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
 		loadedImage->pitch * loadedImage->h, pixels, NULL);
 
@@ -511,6 +471,11 @@ int main(int argc, char* argv[])
 	size_t globalWorkSize[2] = { loadedImage->w, loadedImage->h };
 	size_t localWorkSize[2] = { 16, 16 };
 
+	CTiming timer;
+	int seconds, useconds;
+	int frames = 0;
+	char array[42];
+
 	SDL_Event e;
 	bool quit = false;
 	while (!quit){
@@ -519,9 +484,15 @@ int main(int argc, char* argv[])
 				quit = true;
 			}
 		}
-
+		
 		time = SDL_GetTicks() / 1000.0f;
+		float fps = frames / time;
+		sprintf(array, "%s%f", "Assignment 3 - OpenCL, Average FPS: ", fps);
+		SDL_SetWindowTitle(window, array);
+
 		clSetKernelArg(kernel, 2, sizeof(cl_float), &time);
+
+		timer.Start();
 		SDL_LockTexture(texture, NULL, &pixels, &loadedImage->pitch);
 
 		cl_int err = clEnqueueNDRangeKernel(commandQueue, kernel, 2, NULL,
@@ -545,11 +516,16 @@ int main(int argc, char* argv[])
 		}
 
 		SDL_UnlockTexture(texture);
+		timer.End();
+		if (timer.Diff(seconds, useconds))
+			std::cerr << "Warning: timer returned negative difference!" << std::endl;
+		std::cout << "OpenCL ran in " << seconds << "." << useconds << " seconds" << std::endl << std::endl;
 
 		//Render the scene
 		SDL_RenderClear(renderer);
 		renderTexture(texture, renderer, 0, 0);
 		SDL_RenderPresent(renderer);
+		++frames;
 	}
 
 	SDL_FreeSurface(loadedImage);

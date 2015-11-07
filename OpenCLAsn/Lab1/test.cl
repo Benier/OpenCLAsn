@@ -15,7 +15,6 @@ __kernel void test(
 	float2 p = { 2.0f * fragCoord.xy / resolution.xy - 1.0f };
 	float2 ratio = { resolution.x / resolution.y, 1.0f };
 	p = p * ratio;
-		
 
 	//now, this is the usual part that uses the formula for texture mapping a ray-
 	//traced cylinder using the vector p that describes the position of the pixel
@@ -29,8 +28,8 @@ __kernel void test(
 	//the val of the v coordinate and the current time
 	uv.x += sin(2.0f * uv.y + time * 0.5f);
 
-	uv.x = min(255.0f, uv.x * 256.0f);
-	uv.y = min(255.0f, uv.y * 256.0f);
+	uv.x = min(255.0f, uv.x * 128.0f);
+	uv.y = min(255.0f, uv.y * 128.0f);
 
 	uchar4 c = image[((int)(uv.x)) + (((int)(uv.y))*get_global_size(0))];
 	output[(int)position.x + ((int)position.y)*get_global_size(0)] = c;
