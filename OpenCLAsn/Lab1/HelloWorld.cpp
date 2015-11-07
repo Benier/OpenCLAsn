@@ -399,6 +399,45 @@ void renderTexture(SDL_Texture *tex, SDL_Renderer *ren, int x, int y)
 	SDL_RenderCopy(ren, tex, NULL, &dst);
 }
 
+void RunSerialShader(SDL_Surface img, const float time, SDL_Texture &output)
+{
+	for (int x = 0; x < img.w; x++)
+	{
+		for (int y = 0; y < img.h; y++)
+		{
+			
+			float resX = 1.0f;
+			float resY = 1.0f;
+
+			float fragCoordX = x / 256.0f;
+			float fragCoordY = y / 256.0f;
+
+			float pX = 2.0f * fragCoordX / resX - 1.0f;
+			float pY = 2.0f * fragCoordY / resY - 1.0f;
+
+			float ratioX = resX / resY;
+			float ratioY = 1.0f;
+			pX = pX * ratioX;
+			pY = pY * ratioY;
+
+			float uvX = atan(pY / pX) * 1.0f / 3.14f;
+			float uvY = 1.0f / sqrt((pX * pX) + (pY + pY));
+			float scaleX = 2.0f;
+			float scaleY = 1.0f;
+
+			uvX = uvX * scaleX;
+			uvY = uvY * scaleY;
+
+			uvX += sin(2.0f * uvY + time * 0.5f);
+
+			uvX = min(255.0f, uvX * 256.0f);
+			uvY = min(255.0f, uvY * 256.0f);
+
+			//output[x,y] = img[uvX, uvY];
+		}
+	}
+}
+
 //	main() for HelloWorld example
 int main(int argc, char* argv[])
 {
