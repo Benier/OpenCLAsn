@@ -23,10 +23,6 @@
 #include <Windows.h>
 
 #undef main
-
-const int SCREEN_WIDTH = 640;
-const int SCREEN_HEIGHT = 480;
-
 /* FILETIME of Jan 1 1970 00:00:00. */
 static const unsigned __int64 epoch = ((unsigned __int64)116444736000000000ULL);
 
@@ -54,9 +50,11 @@ gettimeofday(struct timeval * tp, struct timezone * tzp)
 	return 0;
 }
 
-
-
 #endif
+
+const int SCREEN_WIDTH = 640;
+const int SCREEN_HEIGHT = 480;
+cl_device_type requestedDevice = CL_DEVICE_TYPE_CPU;
 
 char* CLErrorToString(cl_int error) {
 	switch (error) {
@@ -192,7 +190,7 @@ cl_context CreateContext()
 }
 
 //  Create a command queue on the first device available on the context
-cl_command_queue CreateCommandQueue(cl_context context, cl_device_id *device)
+cl_command_queue CreateCommandQueue(cl_context context, cl_device_id *device, cl_device_type requestedDevice)
 {
 	// Get number of devices
 	cl_int numDevices;
@@ -233,6 +231,7 @@ cl_command_queue CreateCommandQueue(cl_context context, cl_device_id *device)
 
 	// Get device information for each device
 	cl_device_type devType;
+	int selectedDevice = 0;
 	std::cout << std::endl << "Device list:" << std::endl;
 	for (int i = 0; i<numDevices; i++)
 	{
@@ -255,6 +254,9 @@ cl_command_queue CreateCommandQueue(cl_context context, cl_device_id *device)
 			std::cout << " accelerator";
 		if (devType & CL_DEVICE_TYPE_DEFAULT)
 			std::cout << " default";
+
+		if (devType == requestedDevice)
+			selectedDevice = i;
 
 		// device name
 		char devName[1024];
@@ -281,7 +283,30 @@ cl_command_queue CreateCommandQueue(cl_context context, cl_device_id *device)
 		return NULL;
 	}
 
-	*device = deviceList[0];
+	errNum = clGetDeviceInfo(deviceList[selectedDevice], CL_DEVICE_TYPE, sizeof(cl_device_type), (void *)&devType, &retSize);
+	if (!CheckOpenCLError(errNum, "ERROR getting device info!"))
+	{
+		free(deviceList);
+		return NULL;
+	}
+
+	if (devType != requestedDevice) // If the requested device isn't available
+	{
+		std::cerr << "Requested device:";
+
+		if (requestedDevice & CL_DEVICE_TYPE_CPU)
+			std::cout << " CPU";
+		if (requestedDevice & CL_DEVICE_TYPE_GPU)
+			std::cout << " GPU";
+		if (requestedDevice & CL_DEVICE_TYPE_ACCELERATOR)
+			std::cout << " accelerator";
+		if (requestedDevice & CL_DEVICE_TYPE_DEFAULT)
+			std::cout << " default";
+
+		std::cout << " not available." << std::endl << std::endl;
+	}
+
+	*device = deviceList[selectedDevice];
 
 	free(deviceList);
 
@@ -502,7 +527,7 @@ int main(int argc, char* argv[])
 
 	// Create a command-queue on the first device available
 	// on the created context
-	commandQueue = CreateCommandQueue(context, &device);
+	commandQueue = CreateCommandQueue(context, &device, requestedDevice);
 	if (commandQueue == NULL)
 	{
 		Cleanup(context, commandQueue, program, kernel, memObjects);
