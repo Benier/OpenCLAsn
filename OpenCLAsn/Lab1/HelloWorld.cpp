@@ -398,6 +398,40 @@ void renderTexture(SDL_Texture *tex, SDL_Renderer *ren, int x, int y)
 	SDL_RenderCopy(ren, tex, NULL, &dst);
 }
 
+void RunSerialWater(SDL_Surface* loadedImage, SDL_Texture* texture, void* pixels, void* buffer, const float time)
+{
+	SDL_LockTexture(texture, NULL, &pixels, &loadedImage->pitch);
+
+	memcpy(buffer, pixels, loadedImage->pitch * loadedImage->h);
+	cl_char4 * output = (cl_char4 *)pixels;
+	cl_char4 * input = (cl_char4 *)buffer;
+
+	for (int x = 0; x < loadedImage->w; x++)
+	{
+		for (int y = 0; y < loadedImage->h; y++)
+		{
+			float resX = 1.0f;
+			float resY = 1.0f;
+
+			float fragCoordX = x / 256.0f;
+			float fragCoordY = y / 256.0f;
+
+			float uvX = fragCoordX / resX;
+			float uvY = fragCoordY / resY;
+
+			uvY += (cos((uvY + (time * 0.04f)) * 45.0f) * 0.0019f) +
+				(cos((uvY + (time * 0.1f)) * 15.0f) * 0.002f);
+			uvX += (sin((uvY + (time * 0.07f)) * 15.0f) * 0.0029f) +
+				(sin((uvY + (time * 0.1f)) * 15.0f) * 0.002f);
+
+			uvX = min(255.0f, uvX * 256.0f);
+			uvY = min(255.0f, uvY * 256.0f);
+
+			output[x + (y * loadedImage->w)] = input[((int)ceil(uvX)) + (((int)ceil(uvY)) * loadedImage->w)];
+		}
+	}
+}
+
 void RunSerialShader(SDL_Surface* loadedImage, SDL_Texture* texture, void* pixels, void* buffer, const float time)
 {
 	SDL_LockTexture(texture, NULL, &pixels, &loadedImage->pitch);
@@ -417,28 +451,44 @@ void RunSerialShader(SDL_Surface* loadedImage, SDL_Texture* texture, void* pixel
 			float fragCoordX = x / 256.0f;
 			float fragCoordY = y / 256.0f;
 
-			float pX = 2.0f * fragCoordX / resX - 1.0f;
-			float pY = 2.0f * fragCoordY / resY - 1.0f;
+			float pX = (2.0f * fragCoordX / resX) - 1.0f;
+			float pY = (2.0f * fragCoordY / resY) - 1.0f;
 
 			float ratioX = resX / resY;
 			float ratioY = 1.0f;
-			pX = pX * ratioX;
-			pY = pY * ratioY;
+			pX *= ratioX;
+			pY *= ratioY;
 
-			float uvX = atan(pY / pX) * 1.0f / 3.14f;
-			float uvY = 1.0f / sqrt((pX * pX) + (pY * pY));
+			float uvX;
+			if (pX == 0.0f)
+			{
+				uvX = atan(1.0f) * (1.0f / 3.14f);
+			}
+			else
+			{
+				uvX = atan(pY / pX) * (1.0f / 3.14f);
+			}
+			float uvY;
+			if (pY == 0.0f)
+			{
+				uvY = 1.0f;
+			}
+			else
+			{
+				uvY = 1.0f / sqrt(((pX * pX) + (pY * pY)));
+			}
 			float scaleX = 2.0f;
 			float scaleY = 1.0f;
 
-			uvX = uvX * scaleX;
-			uvY = uvY * scaleY;
+			uvX *= scaleX;
+			uvY *= scaleY;
 
-			uvX += sin(2.0f * uvY + time * 0.5f);
+			uvX += sin(((2.0f * uvY) + time) * 0.5f);
 
 			uvX = min(255.0f, uvX * 128.0f);
 			uvY = min(255.0f, uvY * 128.0f);
 
-			output[x + (y * loadedImage->w)] = input[((int)uvX) + ((int)uvY) * loadedImage->w];
+			output[x + (y * loadedImage->w)] = input[((int)uvX) + (((int)uvY) * loadedImage->w)];
 		}
 	}
 
@@ -535,7 +585,7 @@ int main(int argc, char* argv[])
 	}
 
 	// Create OpenCL program from HelloWorld.cl kernel source
-	program = CreateProgram(context, device, "test.cl");
+	program = CreateProgram(context, device, "water.cl");
 	if (program == NULL)
 	{
 		Cleanup(context, commandQueue, program, kernel, memObjects);
@@ -543,7 +593,7 @@ int main(int argc, char* argv[])
 	}
 
 	// Create OpenCL kernel
-	kernel = clCreateKernel(program, "test", NULL);
+	kernel = clCreateKernel(program, "water", NULL);
 	if (kernel == NULL)
 	{
 		std::cerr << "Failed to create kernel" << std::endl;
@@ -586,7 +636,7 @@ int main(int argc, char* argv[])
 	int frames = 0;
 	char array[64];
 
-	bool openCLRunning = true;
+	bool openCLRunning = false;
 	char* type = openCLRunning ? "OpenCL" : "Serial";
 
 	SDL_Event e;
@@ -604,8 +654,10 @@ int main(int argc, char* argv[])
 		SDL_SetWindowTitle(window, array);
 
 		timer.Start();
-		if (openCLRunning) RunOpenCL(kernel, commandQueue, globalWorkSize, localWorkSize, outputBuffer, loadedImage, texture, pixels, time);
-		else RunSerialShader(loadedImage, texture, pixels, buffer, time);
+		if (openCLRunning) 
+			RunOpenCL(kernel, commandQueue, globalWorkSize, localWorkSize, outputBuffer, loadedImage, texture, pixels, time);
+		else 
+			RunSerialWater(loadedImage, texture, pixels, buffer, time);
 		timer.End();
 		if (timer.Diff(seconds, useconds))
 			std::cerr << "Warning: timer returned negative difference!" << std::endl;
