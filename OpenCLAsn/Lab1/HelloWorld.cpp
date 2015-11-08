@@ -55,8 +55,6 @@ gettimeofday(struct timeval * tp, struct timezone * tzp)
 
 const int SCREEN_WIDTH = 640;
 const int SCREEN_HEIGHT = 480;
-bool useCPU = true;
-bool useGPU = true;
 
 char* CLErrorToString(cl_int error) {
 	switch (error) {
@@ -575,9 +573,8 @@ int main(int argc, char* argv[])
 		return 1;
 	}
 
-	if (useGPU)
 	{
-		// Create a gpu command-queue
+		// Try and create a gpu command-queue
 		gpuCommandQueue = CreateCommandQueue(context, &gpuDevice, CL_DEVICE_TYPE_GPU);
 		if (gpuCommandQueue == NULL)
 		{
@@ -586,7 +583,7 @@ int main(int argc, char* argv[])
 		}
 
 		// Create OpenCL program from HelloWorld.cl kernel source
-		gpuProgram = CreateProgram(context, gpuDevice, "water.cl");
+		gpuProgram = CreateProgram(context, gpuDevice, "rgbShift.cl");
 		if (gpuProgram == NULL)
 		{
 			Cleanup(context, gpuCommandQueue, gpuProgram, gpuKernel, memObjects);
@@ -594,7 +591,7 @@ int main(int argc, char* argv[])
 		}
 
 		// Create OpenCL kernel
-		gpuKernel = clCreateKernel(gpuProgram, "water", NULL);
+		gpuKernel = clCreateKernel(gpuProgram, "rgbShift", NULL);
 		if (gpuKernel == NULL)
 		{
 			std::cerr << "Failed to create gpu kernel" << std::endl;
@@ -603,9 +600,8 @@ int main(int argc, char* argv[])
 		}
 	}
 
-	if (useCPU)
 	{
-		// Create a gpu command-queue
+		// Try and create a cpu command-queue
 		cpuCommandQueue = CreateCommandQueue(context, &cpuDevice, CL_DEVICE_TYPE_CPU);
 		if (cpuCommandQueue == NULL)
 		{
@@ -614,7 +610,7 @@ int main(int argc, char* argv[])
 		}
 
 		// Create OpenCL program from HelloWorld.cl kernel source
-		cpuProgram = CreateProgram(context, cpuDevice, "water.cl");
+		cpuProgram = CreateProgram(context, cpuDevice, "rgbShift.cl");
 		if (cpuProgram == NULL)
 		{
 			Cleanup(context, cpuCommandQueue, cpuProgram, cpuKernel, memObjects);
@@ -622,7 +618,7 @@ int main(int argc, char* argv[])
 		}
 
 		// Create OpenCL kernel
-		cpuKernel = clCreateKernel(cpuProgram, "water", NULL);
+		cpuKernel = clCreateKernel(cpuProgram, "rgbShift", NULL);
 		if (cpuKernel == NULL)
 		{
 			std::cerr << "Failed to create gpu kernel" << std::endl;
