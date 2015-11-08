@@ -399,6 +399,40 @@ void renderTexture(SDL_Texture *tex, SDL_Renderer *ren, int x, int y)
 	SDL_RenderCopy(ren, tex, NULL, &dst);
 }
 
+void RunSerialWater(SDL_Surface* loadedImage, SDL_Texture* texture, void* pixels, void* buffer, const float time)
+{
+	SDL_LockTexture(texture, NULL, &pixels, &loadedImage->pitch);
+
+	memcpy(buffer, pixels, loadedImage->pitch * loadedImage->h);
+	cl_char4 * output = (cl_char4 *)pixels;
+	cl_char4 * input = (cl_char4 *)buffer;
+
+	for (int x = 0; x < loadedImage->w; x++)
+	{
+		for (int y = 0; y < loadedImage->h; y++)
+		{
+			float resX = 1.0f;
+			float resY = 1.0f;
+
+			float fragCoordX = x / 256.0f;
+			float fragCoordY = y / 256.0f;
+
+			float uvX = fragCoordX / resX;
+			float uvY = fragCoordY / resY;
+
+			uvY += (cos((uvY + (time * 0.04f)) * 45.0f) * 0.0019f) +
+				(cos((uvY + (time * 0.1f)) * 15.0f) * 0.002f);
+			uvX += (sin((uvY + (time * 0.07f)) * 15.0f) * 0.0029f) +
+				(sin((uvY + (time * 0.1f)) * 15.0f) * 0.002f);
+
+			uvX = min(255.0f, uvX * 256.0f);
+			uvY = min(255.0f, uvY * 256.0f);
+
+			output[x + (y * loadedImage->w)] = input[((int)ceil(uvX)) + (((int)ceil(uvY)) * loadedImage->w)];
+		}
+	}
+}
+
 void RunSerialShader(SDL_Surface* loadedImage, SDL_Texture* texture, void* pixels, void* buffer, const float time)
 {
 	SDL_LockTexture(texture, NULL, &pixels, &loadedImage->pitch);
@@ -418,28 +452,44 @@ void RunSerialShader(SDL_Surface* loadedImage, SDL_Texture* texture, void* pixel
 			float fragCoordX = x / 256.0f;
 			float fragCoordY = y / 256.0f;
 
-			float pX = 2.0f * fragCoordX / resX - 1.0f;
-			float pY = 2.0f * fragCoordY / resY - 1.0f;
+			float pX = (2.0f * fragCoordX / resX) - 1.0f;
+			float pY = (2.0f * fragCoordY / resY) - 1.0f;
 
 			float ratioX = resX / resY;
 			float ratioY = 1.0f;
-			pX = pX * ratioX;
-			pY = pY * ratioY;
+			pX *= ratioX;
+			pY *= ratioY;
 
-			float uvX = atan(pY / pX) * 1.0f / 3.14f;
-			float uvY = 1.0f / sqrt((pX * pX) + (pY * pY));
+			float uvX;
+			if (pX == 0.0f)
+			{
+				uvX = atan(1.0f) * (1.0f / 3.14f);
+			}
+			else
+			{
+				uvX = atan(pY / pX) * (1.0f / 3.14f);
+			}
+			float uvY;
+			if (pY == 0.0f)
+			{
+				uvY = 1.0f;
+			}
+			else
+			{
+				uvY = 1.0f / sqrt(((pX * pX) + (pY * pY)));
+			}
 			float scaleX = 2.0f;
 			float scaleY = 1.0f;
 
-			uvX = uvX * scaleX;
-			uvY = uvY * scaleY;
+			uvX *= scaleX;
+			uvY *= scaleY;
 
-			uvX += sin(2.0f * uvY + time * 0.5f);
+			uvX += sin(((2.0f * uvY) + time) * 0.5f);
 
 			uvX = min(255.0f, uvX * 128.0f);
 			uvY = min(255.0f, uvY * 128.0f);
 
-			output[x + (y * loadedImage->w)] = input[((int)uvX) + ((int)uvY) * loadedImage->w];
+			output[x + (y * loadedImage->w)] = input[((int)uvX) + (((int)uvY) * loadedImage->w)];
 		}
 	}
 
@@ -539,7 +589,7 @@ int main(int argc, char* argv[])
 		}
 
 		// Create OpenCL program from HelloWorld.cl kernel source
-		gpuProgram = CreateProgram(context, gpuDevice, "test.cl");
+		gpuProgram = CreateProgram(context, gpuDevice, "water.cl");
 		if (gpuProgram == NULL)
 		{
 			Cleanup(context, gpuCommandQueue, gpuProgram, gpuKernel, memObjects);
@@ -547,7 +597,7 @@ int main(int argc, char* argv[])
 		}
 
 		// Create OpenCL kernel
-		gpuKernel = clCreateKernel(gpuProgram, "test", NULL);
+		gpuKernel = clCreateKernel(gpuProgram, "water", NULL);
 		if (gpuKernel == NULL)
 		{
 			std::cerr << "Failed to create gpu kernel" << std::endl;
@@ -567,7 +617,7 @@ int main(int argc, char* argv[])
 		}
 
 		// Create OpenCL program from HelloWorld.cl kernel source
-		cpuProgram = CreateProgram(context, cpuDevice, "test.cl");
+		cpuProgram = CreateProgram(context, cpuDevice, "water.cl");
 		if (cpuProgram == NULL)
 		{
 			Cleanup(context, cpuCommandQueue, cpuProgram, cpuKernel, memObjects);
@@ -575,7 +625,7 @@ int main(int argc, char* argv[])
 		}
 
 		// Create OpenCL kernel
-		cpuKernel = clCreateKernel(cpuProgram, "test", NULL);
+		cpuKernel = clCreateKernel(cpuProgram, "water", NULL);
 		if (cpuKernel == NULL)
 		{
 			std::cerr << "Failed to create gpu kernel" << std::endl;
@@ -665,7 +715,7 @@ int main(int argc, char* argv[])
 			}
 			
 		}
-		else RunSerialShader(loadedImage, texture, pixels, buffer, time);
+		else RunSerialWater(loadedImage, texture, pixels, buffer, time);
 
 		timer.End();
 		if (timer.Diff(seconds, useconds))
