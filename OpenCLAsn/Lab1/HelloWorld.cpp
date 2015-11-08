@@ -14,6 +14,7 @@
 #include <fstream>
 #include <sstream>
 #include "SDL.h"
+#include <chrono>
 
 #ifdef __APPLE__
 #include <sys/time.h>
@@ -116,20 +117,16 @@ public:
 	CTiming() {}
 	~CTiming() {}
 
-	void Start() { gettimeofday(&tvBegin, NULL); }
-	void End() { gettimeofday(&tvEnd, NULL); }
-	bool Diff(int &seconds, int &useconds)
+	void Start() { start = std::chrono::high_resolution_clock::now(); }
+	void End() { end = std::chrono::high_resolution_clock::now(); }
+	void Seconds(double &seconds)
 	{
-		long int diff = (tvEnd.tv_usec + 1000000 * tvEnd.tv_sec) -
-			(tvBegin.tv_usec + 1000000 * tvBegin.tv_sec);
-		seconds = diff / 1000000;
-		useconds = diff % 1000000;
-		return (diff<0) ? true : false;
+		std::chrono::duration<double> elapsed = end - start;
+		seconds = elapsed.count();
 	}
 
 private:
-	struct timeval tvBegin, tvEnd, tvDiff;
-
+	std::chrono::time_point<std::chrono::high_resolution_clock> start, end;
 };
 
 // Function to check return value of OpenCL calls and
@@ -659,32 +656,62 @@ int main(int argc, char* argv[])
 	cl_int offsetGPU = 0;
 	cl_int offsetCPU = loadedImage->h / 2;
 
-	if (gpuCommandQueue != 0)
-	{
-		clSetKernelArg(gpuKernel, 0, sizeof(cl_mem), &inputImage);
-		clSetKernelArg(gpuKernel, 1, sizeof(cl_mem), &outputBuffer);
-		clSetKernelArg(gpuKernel, 2, sizeof(cl_float), &time);
-		clSetKernelArg(gpuKernel, 3, sizeof(cl_int), &offsetGPU);
-	}
+	clSetKernelArg(gpuKernel, 0, sizeof(cl_mem), &inputImage);
+	clSetKernelArg(gpuKernel, 1, sizeof(cl_mem), &outputBuffer);
+	clSetKernelArg(gpuKernel, 2, sizeof(cl_float), &time);
+	clSetKernelArg(gpuKernel, 3, sizeof(cl_int), &offsetGPU);
 
-	if (cpuCommandQueue != 0)
-	{
-		clSetKernelArg(cpuKernel, 0, sizeof(cl_mem), &inputImage);
-		clSetKernelArg(cpuKernel, 1, sizeof(cl_mem), &outputBuffer);
-		clSetKernelArg(cpuKernel, 2, sizeof(cl_float), &time);
-		clSetKernelArg(cpuKernel, 3, sizeof(cl_int), &offsetCPU);
-	}
 
-	size_t globalWorkSize[2] = { loadedImage->w, loadedImage->h/2 };
-	size_t localWorkSize[2] = { 16, 16/2 };
+	clSetKernelArg(cpuKernel, 0, sizeof(cl_mem), &inputImage);
+	clSetKernelArg(cpuKernel, 1, sizeof(cl_mem), &outputBuffer);
+	clSetKernelArg(cpuKernel, 2, sizeof(cl_float), &time);
+	clSetKernelArg(cpuKernel, 3, sizeof(cl_int), &offsetCPU);
 
 	CTiming timer;
-	int seconds, useconds;
+	double seconds;
 	int frames = 0;
 	char array[64];
 
 	bool openCLRunning = true;
 	char* type = openCLRunning ? "OpenCL" : "Serial";
+
+	// Run Serially
+	timer.Start();
+	RunSerialWater(loadedImage, texture, pixels, buffer, time);
+	timer.End();
+	timer.Seconds(seconds);
+	std::cout << "Serially" << " ran in " << seconds << " seconds" << std::endl << std::endl;
+
+	// Run CPU + GPU
+	size_t globalWorkSize[2] = { loadedImage->w, loadedImage->h / 2 };
+	size_t localWorkSize[2] = { 16, 16 / 2 };
+	timer.Start();
+	RunOpenCL(gpuKernel, gpuCommandQueue, globalWorkSize, localWorkSize, outputBuffer, loadedImage, texture, pixels, time);
+	RunOpenCL(cpuKernel, cpuCommandQueue, globalWorkSize, localWorkSize, outputBuffer, loadedImage, texture, pixels, time);
+	timer.End();
+	timer.Seconds(seconds);
+	std::cout << "OpenCL GPU + CPU" << " ran in " << seconds << " seconds" << std::endl << std::endl;
+
+	globalWorkSize[0] = loadedImage->w;
+	globalWorkSize[1] = loadedImage->h;
+	localWorkSize[0] = 16;
+	localWorkSize[1] = 16;
+	offsetCPU = 0;
+	offsetGPU = 0;
+
+	// Run CPU
+	timer.Start();
+	RunOpenCL(cpuKernel, cpuCommandQueue, globalWorkSize, localWorkSize, outputBuffer, loadedImage, texture, pixels, time);
+	timer.End();
+	timer.Seconds(seconds);
+	std::cout << "OpenCL CPU" << " ran in " << seconds << " seconds" << std::endl << std::endl;
+
+	// Run GPU
+	timer.Start();
+	RunOpenCL(gpuKernel, gpuCommandQueue, globalWorkSize, localWorkSize, outputBuffer, loadedImage, texture, pixels, time);
+	timer.End();
+	timer.Seconds(seconds);
+	std::cout << "OpenCL GPU" << " ran in " << seconds << " seconds" << std::endl << std::endl;
 
 	SDL_Event e;
 	bool quit = false;
@@ -699,28 +726,6 @@ int main(int argc, char* argv[])
 		float fps = frames / time;
 		sprintf(array, "%s%s%s%f", "Assignment 3 - ", type, " Average FPS: ", fps);
 		SDL_SetWindowTitle(window, array);
-
-		timer.Start();
-
-		if (openCLRunning)
-		{
-			if (gpuCommandQueue != 0)
-			{
-				RunOpenCL(gpuKernel, gpuCommandQueue, globalWorkSize, localWorkSize, outputBuffer, loadedImage, texture, pixels, time);
-			}
-
-			if (cpuCommandQueue != 0)
-			{
-				RunOpenCL(cpuKernel, cpuCommandQueue, globalWorkSize, localWorkSize, outputBuffer, loadedImage, texture, pixels, time);
-			}
-			
-		}
-		else RunSerialWater(loadedImage, texture, pixels, buffer, time);
-
-		timer.End();
-		if (timer.Diff(seconds, useconds))
-			std::cerr << "Warning: timer returned negative difference!" << std::endl;
-		std::cout << type << " ran in " << seconds << "." << useconds << " seconds" << std::endl << std::endl;
 
 		//Render the scene
 		SDL_RenderClear(renderer);
