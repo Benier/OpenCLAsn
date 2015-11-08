@@ -721,12 +721,6 @@ int main(int argc, char* argv[])
 				quit = true;
 			}
 		}
-		
-		time = SDL_GetTicks() / 1000.0f;
-		float fps = frames / time;
-		sprintf(array, "%s%s%s%f", "Assignment 3 - ", type, " Average FPS: ", fps);
-		SDL_SetWindowTitle(window, array);
-
 		//Render the scene
 		SDL_RenderClear(renderer);
 		renderTexture(texture, renderer, 0, 0);
