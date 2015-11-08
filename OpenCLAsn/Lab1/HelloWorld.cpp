@@ -54,7 +54,8 @@ gettimeofday(struct timeval * tp, struct timezone * tzp)
 
 const int SCREEN_WIDTH = 640;
 const int SCREEN_HEIGHT = 480;
-cl_device_type requestedDevice = CL_DEVICE_TYPE_CPU;
+bool useCPU = true;
+bool useGPU = true;
 
 char* CLErrorToString(cl_int error) {
 	switch (error) {
@@ -469,7 +470,6 @@ void RunOpenCL(cl_kernel kernel,
 		return;
 	}
 
-
 	err = clEnqueueReadBuffer(commandQueue, outputBuffer, CL_TRUE,
 		0, loadedImage->pitch * loadedImage->h, pixels,
 		0, NULL, NULL);
@@ -500,6 +500,7 @@ int main(int argc, char* argv[])
 	
 	SDL_Renderer *renderer = SDL_CreateRenderer(window, -1,
 		SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+	
 	if (renderer == nullptr){
 		logSDLError(std::cout, "CreateRenderer");
 		SDL_DestroyWindow(window);
@@ -508,14 +509,16 @@ int main(int argc, char* argv[])
 	}
 
 	cl_context context = 0;
-	cl_command_queue commandQueue = 0;
-	cl_program program = 0;
-	cl_device_id device = 0;
-	cl_kernel kernel = 0;
+	cl_command_queue gpuCommandQueue = 0;
+	cl_command_queue cpuCommandQueue = 0;
+	cl_program gpuProgram = 0;
+	cl_program cpuProgram = 0;
+	cl_device_id gpuDevice = 0;
+	cl_device_id cpuDevice = 0;
+	cl_kernel gpuKernel = 0;
+	cl_kernel cpuKernel = 0;
 	cl_int errNum;
 	cl_mem* memObjects;
-
-
 
 	// Create an OpenCL context on first available platform
 	context = CreateContext();
@@ -525,30 +528,60 @@ int main(int argc, char* argv[])
 		return 1;
 	}
 
-	// Create a command-queue on the first device available
-	// on the created context
-	commandQueue = CreateCommandQueue(context, &device, requestedDevice);
-	if (commandQueue == NULL)
+	if (useGPU)
 	{
-		Cleanup(context, commandQueue, program, kernel, memObjects);
-		return 1;
+		// Create a gpu command-queue
+		gpuCommandQueue = CreateCommandQueue(context, &gpuDevice, CL_DEVICE_TYPE_GPU);
+		if (gpuCommandQueue == NULL)
+		{
+			Cleanup(context, gpuCommandQueue, gpuProgram, gpuKernel, memObjects);
+			return 1;
+		}
+
+		// Create OpenCL program from HelloWorld.cl kernel source
+		gpuProgram = CreateProgram(context, gpuDevice, "test.cl");
+		if (gpuProgram == NULL)
+		{
+			Cleanup(context, gpuCommandQueue, gpuProgram, gpuKernel, memObjects);
+			return 1;
+		}
+
+		// Create OpenCL kernel
+		gpuKernel = clCreateKernel(gpuProgram, "test", NULL);
+		if (gpuKernel == NULL)
+		{
+			std::cerr << "Failed to create gpu kernel" << std::endl;
+			Cleanup(context, gpuCommandQueue, gpuProgram, gpuKernel, memObjects);
+			return 1;
+		}
 	}
 
-	// Create OpenCL program from HelloWorld.cl kernel source
-	program = CreateProgram(context, device, "test.cl");
-	if (program == NULL)
+	if (useCPU)
 	{
-		Cleanup(context, commandQueue, program, kernel, memObjects);
-		return 1;
-	}
+		// Create a gpu command-queue
+		cpuCommandQueue = CreateCommandQueue(context, &cpuDevice, CL_DEVICE_TYPE_CPU);
+		if (cpuCommandQueue == NULL)
+		{
+			Cleanup(context, cpuCommandQueue, cpuProgram, cpuKernel, memObjects);
+			return 1;
+		}
 
-	// Create OpenCL kernel
-	kernel = clCreateKernel(program, "test", NULL);
-	if (kernel == NULL)
-	{
-		std::cerr << "Failed to create kernel" << std::endl;
-		Cleanup(context, commandQueue, program, kernel, memObjects);
-		return 1;
+		// Create OpenCL program from HelloWorld.cl kernel source
+		cpuProgram = CreateProgram(context, cpuDevice, "test.cl");
+		if (cpuProgram == NULL)
+		{
+			Cleanup(context, cpuCommandQueue, cpuProgram, cpuKernel, memObjects);
+			return 1;
+		}
+
+		// Create OpenCL kernel
+		cpuKernel = clCreateKernel(cpuProgram, "test", NULL);
+		if (cpuKernel == NULL)
+		{
+			std::cerr << "Failed to create gpu kernel" << std::endl;
+			Cleanup(context, cpuCommandQueue, cpuProgram, cpuKernel, memObjects);
+			return 1;
+		}
 	}
 
 	// image setup
@@ -573,13 +606,27 @@ int main(int argc, char* argv[])
 		loadedImage->pitch * loadedImage->h, NULL, NULL);
 
 	cl_float time = 0;
+	cl_int offsetGPU = 0;
+	cl_int offsetCPU = loadedImage->h / 2;
 
-	clSetKernelArg(kernel, 0, sizeof(cl_mem), &inputImage);
-	clSetKernelArg(kernel, 1, sizeof(cl_mem), &outputBuffer);
-	clSetKernelArg(kernel, 2, sizeof(cl_float), &time);
+	if (gpuCommandQueue != 0)
+	{
+		clSetKernelArg(gpuKernel, 0, sizeof(cl_mem), &inputImage);
+		clSetKernelArg(gpuKernel, 1, sizeof(cl_mem), &outputBuffer);
+		clSetKernelArg(gpuKernel, 2, sizeof(cl_float), &time);
+		clSetKernelArg(gpuKernel, 3, sizeof(cl_int), &offsetGPU);
+	}
 
-	size_t globalWorkSize[2] = { loadedImage->w, loadedImage->h };
-	size_t localWorkSize[2] = { 16, 16 };
+	if (cpuCommandQueue != 0)
+	{
+		clSetKernelArg(cpuKernel, 0, sizeof(cl_mem), &inputImage);
+		clSetKernelArg(cpuKernel, 1, sizeof(cl_mem), &outputBuffer);
+		clSetKernelArg(cpuKernel, 2, sizeof(cl_float), &time);
+		clSetKernelArg(cpuKernel, 3, sizeof(cl_int), &offsetCPU);
+	}
+
+	size_t globalWorkSize[2] = { loadedImage->w, loadedImage->h/2 };
+	size_t localWorkSize[2] = { 16, 16/2 };
 
 	CTiming timer;
 	int seconds, useconds;
@@ -604,8 +651,22 @@ int main(int argc, char* argv[])
 		SDL_SetWindowTitle(window, array);
 
 		timer.Start();
-		if (openCLRunning) RunOpenCL(kernel, commandQueue, globalWorkSize, localWorkSize, outputBuffer, loadedImage, texture, pixels, time);
+
+		if (openCLRunning)
+		{
+			if (gpuCommandQueue != 0)
+			{
+				RunOpenCL(gpuKernel, gpuCommandQueue, globalWorkSize, localWorkSize, outputBuffer, loadedImage, texture, pixels, time);
+			}
+
+			if (cpuCommandQueue != 0)
+			{
+				RunOpenCL(cpuKernel, cpuCommandQueue, globalWorkSize, localWorkSize, outputBuffer, loadedImage, texture, pixels, time);
+			}
+			
+		}
 		else RunSerialShader(loadedImage, texture, pixels, buffer, time);
+
 		timer.End();
 		if (timer.Diff(seconds, useconds))
 			std::cerr << "Warning: timer returned negative difference!" << std::endl;
