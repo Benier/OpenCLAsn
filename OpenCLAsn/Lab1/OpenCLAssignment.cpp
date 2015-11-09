@@ -8,7 +8,7 @@
 //
 /////////////////////////////////////////////////////////////////////////////////
 
-
+#define CL_USE_DEPRECATED_OPENCL_2_0_APIS
 #include <stdlib.h>
 #include <iostream>
 #include <fstream>
@@ -383,27 +383,27 @@ void RunSerialRGBShiftShader(SDL_Surface* loadedImage, SDL_Texture* texture, voi
 			float yOffset = 0.02;
 
 			cl_char4 color;
-			float fragCoord[2] = { x / 1920.0f, y / 1080.0f };
+			float fragCoord[2] = { x / 512.0f, y / 512.0f };
 
 			xOffset = xOffset * sin(20.0f);
 			yOffset = yOffset * cos(20.0f);
 
 			float rFract[2] = { fragCoord[0] + xOffset, -fragCoord[1] + yOffset };
 			float rCoords[2] = { fmin(rFract[0] - floor(rFract[0]), 1.0f), fmin(rFract[1] - floor(rFract[1]), 1.0f) };
-			rCoords[0] = min(1919.0f, rCoords[0] * 1920.0f);
-			rCoords[1] = min(1079.0f, rCoords[1] * 1080.0f);
+			rCoords[0] = min(511.0f, rCoords[0] * 512.0f);
+			rCoords[1] = min(511.0f, rCoords[1] * 512.0f);
 			color.x = input[((int)(rCoords[0])) + (((int)(rCoords[1])) * loadedImage->w)].x;
 
 			float gFract[2] = { fragCoord[0] + 0.000, -fragCoord[1] };
 			float gCoords[2] = { fmin(gFract[0] - floor(gFract[0]), 1.0f), fmin(gFract[1] - floor(gFract[1]), 1.0f) };
-			gCoords[0] = min(1919.0f, gCoords[0] * 1920.0f);
-			gCoords[1] = min(1079.0f, gCoords[1] * 1080.0f);
+			gCoords[0] = min(511.0f, gCoords[0] * 512.0f);
+			gCoords[1] = min(511.0f, gCoords[1] * 512.0f);
 			color.y = input[((int)(gCoords[0])) + (((int)(gCoords[1])) * loadedImage->w)].y;
 
 			float bFract[2] = { fragCoord[0] - xOffset, -fragCoord[1] - yOffset };
 			float bCoords[2] = { fmin(bFract[0] - floor(bFract[0]), 1.0f), fmin(bFract[1] - floor(bFract[1]), 1.0f) };
-			bCoords[0] = min(1919.0f, bCoords[0] * 1920.0f);
-			bCoords[1] = min(1079.0f, bCoords[1] * 1080.0f);
+			bCoords[0] = min(511.0f, bCoords[0] * 512.0f);
+			bCoords[1] = min(511.0f, bCoords[1] * 512.0f);
 			color.z = input[((int)(bCoords[0])) + (((int)(bCoords[1])) * loadedImage->w)].z;
 
 			color.w = input[(int)x + ((int)y) * loadedImage->w].w;
