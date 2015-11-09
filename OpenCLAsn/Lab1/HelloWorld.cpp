@@ -27,8 +27,8 @@
 
 #endif
 
-const int SCREEN_WIDTH = 640;
-const int SCREEN_HEIGHT = 480;
+const int SCREEN_WIDTH = 1920;
+const int SCREEN_HEIGHT = 1024;
 
 char* CLErrorToString(cl_int error) {
 	switch (error) {
@@ -480,27 +480,27 @@ void RunSerialRGBShiftShader(SDL_Surface* loadedImage, SDL_Texture* texture, voi
 			float yOffset = 0.02;
 
 			cl_char4 color;
-			float fragCoord[2] = { x / 256.0f, y / 256.0f };
+			float fragCoord[2] = { x / 1920.0f, y / 1080.0f };
 
 			xOffset = xOffset * sin(20.0f);
 			yOffset = yOffset * cos(20.0f);
 
 			float rFract[2] = { fragCoord[0] + xOffset, -fragCoord[1] + yOffset };
 			float rCoords[2] = { fmin(rFract[0] - floor(rFract[0]), 1.0f), fmin(rFract[1] - floor(rFract[1]), 1.0f) };
-			rCoords[0] = min(255.0f, rCoords[0] * 256.0f);
-			rCoords[1] = min(255.0f, rCoords[1] * 256.0f);
+			rCoords[0] = min(1919.0f, rCoords[0] * 1920.0f);
+			rCoords[1] = min(1079.0f, rCoords[1] * 1080.0f);
 			color.x = input[((int)(rCoords[0])) + (((int)(rCoords[1])) * loadedImage->w)].x;
 
 			float gFract[2] = { fragCoord[0] + 0.000, -fragCoord[1] };
 			float gCoords[2] = { fmin(gFract[0] - floor(gFract[0]), 1.0f), fmin(gFract[1] - floor(gFract[1]), 1.0f) };
-			gCoords[0] = min(255.0f, gCoords[0] * 256.0f);
-			gCoords[1] = min(255.0f, gCoords[1] * 256.0f);
+			gCoords[0] = min(1919.0f, gCoords[0] * 1920.0f);
+			gCoords[1] = min(1079.0f, gCoords[1] * 1080.0f);
 			color.y = input[((int)(gCoords[0])) + (((int)(gCoords[1])) * loadedImage->w)].y;
 
 			float bFract[2] = { fragCoord[0] - xOffset, -fragCoord[1] - yOffset };
 			float bCoords[2] = { fmin(bFract[0] - floor(bFract[0]), 1.0f), fmin(bFract[1] - floor(bFract[1]), 1.0f) };
-			bCoords[0] = min(255.0f, bCoords[0] * 256.0f);
-			bCoords[1] = min(255.0f, bCoords[1] * 256.0f);
+			bCoords[0] = min(1919.0f, bCoords[0] * 1920.0f);
+			bCoords[1] = min(1079.0f, bCoords[1] * 1080.0f);
 			color.z = input[((int)(bCoords[0])) + (((int)(bCoords[1])) * loadedImage->w)].z;
 
 			color.w = input[(int)x + ((int)y) * loadedImage->w].w;
@@ -645,7 +645,7 @@ int main(int argc, char* argv[])
 	}
 
 	// image setup
-	const std::string file = "background3.bmp";
+	const std::string file = "platypus.bmp";
 	SDL_Texture *texture = nullptr;
 	SDL_Surface *loadedImage = SDL_LoadBMP(file.c_str());
 	loadedImage = SDL_ConvertSurface(loadedImage, SDL_GetWindowSurface(window)->format, NULL); // get the right format
