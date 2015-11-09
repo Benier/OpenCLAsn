@@ -24,32 +24,6 @@
 #include <Windows.h>
 
 #undef main
-/* FILETIME of Jan 1 1970 00:00:00. */
-static const unsigned __int64 epoch = ((unsigned __int64)116444736000000000ULL);
-
-/*
-* timezone information is stored outside the kernel so tzp isn't used anymore.
-*
-* Note: this function is not for Win32 high precision timing purpose. See
-* elapsed_time().
-*/
-int
-gettimeofday(struct timeval * tp, struct timezone * tzp)
-{
-	FILETIME    file_time;
-	SYSTEMTIME  system_time;
-	ULARGE_INTEGER ularge;
-
-	GetSystemTime(&system_time);
-	SystemTimeToFileTime(&system_time, &file_time);
-	ularge.LowPart = file_time.dwLowDateTime;
-	ularge.HighPart = file_time.dwHighDateTime;
-
-	tp->tv_sec = (long)((ularge.QuadPart - epoch) / 10000000L);
-	tp->tv_usec = (long)(system_time.wMilliseconds * 1000);
-
-	return 0;
-}
 
 #endif
 
@@ -185,15 +159,14 @@ cl_context CreateContext()
 	return context;
 }
 
-//  Create a command queue on the first device available on the context
-cl_command_queue CreateCommandQueue(cl_context context, cl_device_id *device, cl_device_type requestedDevice)
+void FetchDevices(cl_context context, cl_device_id devices[2])
 {
 	// Get number of devices
 	cl_int numDevices;
 	size_t retSize;
 	cl_int errNum = clGetContextInfo(context, CL_CONTEXT_NUM_DEVICES, sizeof(numDevices), (void *)&numDevices, &retSize);
 	if (!CheckOpenCLError(errNum, "Could not get context info!"))
-		return NULL;
+		return;
 	std::cout << std::endl << "There are " << numDevices << " devices." << std::endl;
 
 
@@ -221,13 +194,14 @@ cl_command_queue CreateCommandQueue(cl_context context, cl_device_id *device, cl
 			break;
 		}
 		std::cerr << " size = " << numDevices * sizeof(cl_device_id) << ";" << retSize << std::endl;
-		return NULL;
+		return;
 	}
 
 
 	// Get device information for each device
 	cl_device_type devType;
-	int selectedDevice = 0;
+	int selectedGPU = 0;
+	int selectedCPU = 0;
 	std::cout << std::endl << "Device list:" << std::endl;
 	for (int i = 0; i<numDevices; i++)
 	{
@@ -239,20 +213,23 @@ cl_command_queue CreateCommandQueue(cl_context context, cl_device_id *device, cl
 		if (!CheckOpenCLError(errNum, "ERROR getting device info!"))
 		{
 			free(deviceList);
-			return NULL;
+			return;
 		}
 		std::cout << " type " << devType << ":";
 		if (devType & CL_DEVICE_TYPE_CPU)
+		{
+			selectedCPU = i;
 			std::cout << " CPU";
+		}
 		if (devType & CL_DEVICE_TYPE_GPU)
+		{
+			selectedGPU = i;
 			std::cout << " GPU";
+		}
 		if (devType & CL_DEVICE_TYPE_ACCELERATOR)
 			std::cout << " accelerator";
 		if (devType & CL_DEVICE_TYPE_DEFAULT)
 			std::cout << " default";
-
-		if (devType == requestedDevice)
-			selectedDevice = i;
 
 		// device name
 		char devName[1024];
@@ -260,51 +237,52 @@ cl_command_queue CreateCommandQueue(cl_context context, cl_device_id *device, cl
 		if (!CheckOpenCLError(errNum, "ERROR getting device name!"))
 		{
 			free(deviceList);
-			return NULL;
+			return;
 		}
 		std::cout << " name=<" << devName << ">" << std::endl;
 
 	}
 	std::cout << std::endl;
 
-
-	// In this example, we just choose the first available device.  In a
-	// real program, you would likely use all available devices or choose
-	// the highest performance device based on OpenCL device queries
-	cl_command_queue commandQueue = clCreateCommandQueue(context, deviceList[0], 0, NULL);
-	if (commandQueue == NULL)
-	{
-		free(deviceList);
-		std::cerr << "Failed to create commandQueue for device 0";
-		return NULL;
-	}
-
-	errNum = clGetDeviceInfo(deviceList[selectedDevice], CL_DEVICE_TYPE, sizeof(cl_device_type), (void *)&devType, &retSize);
+	errNum = clGetDeviceInfo(deviceList[selectedGPU], CL_DEVICE_TYPE, sizeof(cl_device_type), (void *)&devType, &retSize);
 	if (!CheckOpenCLError(errNum, "ERROR getting device info!"))
 	{
 		free(deviceList);
-		return NULL;
+		return;
 	}
 
-	if (devType != requestedDevice) // If the requested device isn't available
+	if (devType != CL_DEVICE_TYPE_GPU) // If the requested device isn't available
 	{
-		std::cerr << "Requested device:";
-
-		if (requestedDevice & CL_DEVICE_TYPE_CPU)
-			std::cout << " CPU";
-		if (requestedDevice & CL_DEVICE_TYPE_GPU)
-			std::cout << " GPU";
-		if (requestedDevice & CL_DEVICE_TYPE_ACCELERATOR)
-			std::cout << " accelerator";
-		if (requestedDevice & CL_DEVICE_TYPE_DEFAULT)
-			std::cout << " default";
-
-		std::cout << " not available." << std::endl << std::endl;
+		std::cout << "GPU not available." << std::endl << std::endl;
 	}
 
-	*device = deviceList[selectedDevice];
+	errNum = clGetDeviceInfo(deviceList[selectedCPU], CL_DEVICE_TYPE, sizeof(cl_device_type), (void *)&devType, &retSize);
+	if (!CheckOpenCLError(errNum, "ERROR getting device info!"))
+	{
+		free(deviceList);
+		return;
+	}
+
+	if (devType != CL_DEVICE_TYPE_CPU) // If the requested device isn't available
+	{
+		std::cout << "CPU not available." << std::endl << std::endl;
+	}
+
+	devices[0] = deviceList[selectedGPU];
+	devices[1] = deviceList[selectedCPU];
 
 	free(deviceList);
+}
+
+//  Create a command queue on the first device available on the context
+cl_command_queue CreateCommandQueue(cl_context context, cl_device_id device)
+{
+	cl_command_queue commandQueue = clCreateCommandQueue(context, device, 0, NULL);
+	if (commandQueue == NULL)
+	{
+		std::cerr << "Failed to create commandQueue";
+		return NULL;
+	}
 
 	return commandQueue;
 }
@@ -355,13 +333,8 @@ cl_program CreateProgram(cl_context context, cl_device_id device, const char* fi
 
 //  Cleanup any created OpenCL resources
 void Cleanup(cl_context context, cl_command_queue commandQueue,
-	cl_program program, cl_kernel kernel, cl_mem memObjects[3])
+	cl_program program, cl_kernel kernel)
 {
-	for (int i = 0; i < 3; i++)
-	{
-		if (memObjects[i] != 0)
-			clReleaseMemObject(memObjects[i]);
-	}
 	if (commandQueue != 0)
 		clReleaseCommandQueue(commandQueue);
 
@@ -601,8 +574,7 @@ int main(int argc, char* argv[])
 	cl_command_queue cpuCommandQueue = 0;
 	cl_program gpuProgram = 0;
 	cl_program cpuProgram = 0;
-	cl_device_id gpuDevice = 0;
-	cl_device_id cpuDevice = 0;
+	cl_device_id devices[2] = { 0 }; // device[0] for GPU and [1] for CPU
 	cl_kernel gpuKernel = 0;
 	cl_kernel cpuKernel = 0;
 	cl_int errNum;
@@ -616,20 +588,22 @@ int main(int argc, char* argv[])
 		return 1;
 	}
 
+	FetchDevices(context, devices);
+
 	{
 		// Try and create a gpu command-queue
-		gpuCommandQueue = CreateCommandQueue(context, &gpuDevice, CL_DEVICE_TYPE_GPU);
+		gpuCommandQueue = CreateCommandQueue(context, devices[0]);
 		if (gpuCommandQueue == NULL)
 		{
-			Cleanup(context, gpuCommandQueue, gpuProgram, gpuKernel, memObjects);
+			Cleanup(context, gpuCommandQueue, gpuProgram, gpuKernel);
 			return 1;
 		}
 
 		// Create OpenCL program from HelloWorld.cl kernel source
-		gpuProgram = CreateProgram(context, gpuDevice, "rgbShift.cl");
+		gpuProgram = CreateProgram(context, devices[0], "rgbShift.cl");
 		if (gpuProgram == NULL)
 		{
-			Cleanup(context, gpuCommandQueue, gpuProgram, gpuKernel, memObjects);
+			Cleanup(context, gpuCommandQueue, gpuProgram, gpuKernel);
 			return 1;
 		}
 
@@ -638,25 +612,25 @@ int main(int argc, char* argv[])
 		if (gpuKernel == NULL)
 		{
 			std::cerr << "Failed to create gpu kernel" << std::endl;
-			Cleanup(context, gpuCommandQueue, gpuProgram, gpuKernel, memObjects);
+			Cleanup(context, gpuCommandQueue, gpuProgram, gpuKernel);
 			return 1;
 		}
 	}
 
 	{
 		// Try and create a cpu command-queue
-		cpuCommandQueue = CreateCommandQueue(context, &cpuDevice, CL_DEVICE_TYPE_CPU);
+		cpuCommandQueue = CreateCommandQueue(context, devices[1]);
 		if (cpuCommandQueue == NULL)
 		{
-			Cleanup(context, cpuCommandQueue, cpuProgram, cpuKernel, memObjects);
+			Cleanup(context, cpuCommandQueue, cpuProgram, cpuKernel);
 			return 1;
 		}
 
 		// Create OpenCL program from HelloWorld.cl kernel source
-		cpuProgram = CreateProgram(context, cpuDevice, "rgbShift.cl");
+		cpuProgram = CreateProgram(context, devices[1], "rgbShift.cl");
 		if (cpuProgram == NULL)
 		{
-			Cleanup(context, cpuCommandQueue, cpuProgram, cpuKernel, memObjects);
+			Cleanup(context, cpuCommandQueue, cpuProgram, cpuKernel);
 			return 1;
 		}
 
@@ -665,7 +639,7 @@ int main(int argc, char* argv[])
 		if (cpuKernel == NULL)
 		{
 			std::cerr << "Failed to create gpu kernel" << std::endl;
-			Cleanup(context, cpuCommandQueue, cpuProgram, cpuKernel, memObjects);
+			Cleanup(context, cpuCommandQueue, cpuProgram, cpuKernel);
 			return 1;
 		}
 	}
@@ -730,6 +704,7 @@ int main(int argc, char* argv[])
 	std::cout << "OpenCL GPU + CPU" << " ran in " << seconds << " seconds" << std::endl << std::endl;
 	SDL_UnlockTexture(texture);
 
+	// Configure worker size and offsets to run entirely on a single device.
 	globalWorkSize[0] = loadedImage->w;
 	globalWorkSize[1] = loadedImage->h;
 	localWorkSize[0] = 16;
