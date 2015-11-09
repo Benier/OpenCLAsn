@@ -4,7 +4,6 @@ __kernel void rgbShift(
 	__global uchar4* output,
 	const int offset
 	) {
-
 	float xOffset = 0.04;
 	float yOffset = 0.02;
 
