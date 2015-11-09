@@ -2,7 +2,6 @@
 __kernel void rgbShift(
 	__global uchar4* image,
 	__global uchar4* output,
-	const float time,
 	const int offset
 	) {
 
@@ -13,8 +12,8 @@ __kernel void rgbShift(
 	float2 position = { get_global_id(0), get_global_id(1) + offset };
 	float2 fragCoord = { position.x / 256.0f, position.y / 256.0f };
 
-	xOffset = xOffset * sin(time * 2.0f);
-	yOffset = yOffset * cos(time * 2.0f);
+	xOffset = xOffset * sin(20.0f);
+	yOffset = yOffset * cos(20.0f);
 
 	float2 rFract = { fragCoord.x + xOffset, -fragCoord.y + yOffset };
 	float2 rCoords = { fmin(rFract.x - floor(rFract.x), 1.0f), fmin(rFract.y - floor(rFract.y), 1.0f) };

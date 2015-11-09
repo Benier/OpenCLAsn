@@ -501,10 +501,6 @@ void RunOpenCL(cl_kernel kernel,
 				void* pixels, 
 				const float time) {
 
-	clSetKernelArg(kernel, 2, sizeof(cl_float), &time);
-
-	SDL_LockTexture(texture, NULL, &pixels, &loadedImage->pitch);
-
 	cl_int err = clEnqueueNDRangeKernel(commandQueue, kernel, 2, NULL,
 		globalWorkSize, localWorkSize,
 		0, NULL, NULL);
@@ -524,7 +520,6 @@ void RunOpenCL(cl_kernel kernel,
 		return;
 	}
 
-	SDL_UnlockTexture(texture);
 }
 
 //	main() for HelloWorld example
@@ -654,14 +649,11 @@ int main(int argc, char* argv[])
 
 	clSetKernelArg(gpuKernel, 0, sizeof(cl_mem), &inputImage);
 	clSetKernelArg(gpuKernel, 1, sizeof(cl_mem), &outputBuffer);
-	clSetKernelArg(gpuKernel, 2, sizeof(cl_float), &time);
-	clSetKernelArg(gpuKernel, 3, sizeof(cl_int), &offsetGPU);
-
+	clSetKernelArg(gpuKernel, 2, sizeof(cl_int), &offsetGPU);
 
 	clSetKernelArg(cpuKernel, 0, sizeof(cl_mem), &inputImage);
 	clSetKernelArg(cpuKernel, 1, sizeof(cl_mem), &outputBuffer);
-	clSetKernelArg(cpuKernel, 2, sizeof(cl_float), &time);
-	clSetKernelArg(cpuKernel, 3, sizeof(cl_int), &offsetCPU);
+	clSetKernelArg(cpuKernel, 2, sizeof(cl_int), &offsetCPU);
 
 	CTiming timer;
 	double seconds;
@@ -681,12 +673,14 @@ int main(int argc, char* argv[])
 	// Run CPU + GPU
 	size_t globalWorkSize[2] = { loadedImage->w, loadedImage->h / 2 };
 	size_t localWorkSize[2] = { 16, 16 / 2 };
+	SDL_LockTexture(texture, NULL, &pixels, &loadedImage->pitch);
 	timer.Start();
 	RunOpenCL(gpuKernel, gpuCommandQueue, globalWorkSize, localWorkSize, outputBuffer, loadedImage, texture, pixels, time);
 	RunOpenCL(cpuKernel, cpuCommandQueue, globalWorkSize, localWorkSize, outputBuffer, loadedImage, texture, pixels, time);
 	timer.End();
 	timer.Seconds(seconds);
 	std::cout << "OpenCL GPU + CPU" << " ran in " << seconds << " seconds" << std::endl << std::endl;
+	SDL_UnlockTexture(texture);
 
 	globalWorkSize[0] = loadedImage->w;
 	globalWorkSize[1] = loadedImage->h;
@@ -695,19 +689,26 @@ int main(int argc, char* argv[])
 	offsetCPU = 0;
 	offsetGPU = 0;
 
+	clSetKernelArg(gpuKernel, 2, sizeof(cl_int), &offsetGPU);
+	clSetKernelArg(cpuKernel, 2, sizeof(cl_int), &offsetCPU);
+
 	// Run CPU
+	SDL_LockTexture(texture, NULL, &pixels, &loadedImage->pitch);
 	timer.Start();
 	RunOpenCL(cpuKernel, cpuCommandQueue, globalWorkSize, localWorkSize, outputBuffer, loadedImage, texture, pixels, time);
 	timer.End();
 	timer.Seconds(seconds);
 	std::cout << "OpenCL CPU" << " ran in " << seconds << " seconds" << std::endl << std::endl;
+	SDL_UnlockTexture(texture);
 
 	// Run GPU
+	SDL_LockTexture(texture, NULL, &pixels, &loadedImage->pitch);
 	timer.Start();
 	RunOpenCL(gpuKernel, gpuCommandQueue, globalWorkSize, localWorkSize, outputBuffer, loadedImage, texture, pixels, time);
 	timer.End();
 	timer.Seconds(seconds);
 	std::cout << "OpenCL GPU" << " ran in " << seconds << " seconds" << std::endl << std::endl;
+	SDL_UnlockTexture(texture);
 
 	SDL_Event e;
 	bool quit = false;
@@ -721,7 +722,6 @@ int main(int argc, char* argv[])
 		SDL_RenderClear(renderer);
 		renderTexture(texture, renderer, 0, 0);
 		SDL_RenderPresent(renderer);
-		++frames;
 	}
 
 	SDL_FreeSurface(loadedImage);
