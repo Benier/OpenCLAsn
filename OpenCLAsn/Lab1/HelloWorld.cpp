@@ -491,6 +491,54 @@ void RunSerialShader(SDL_Surface* loadedImage, SDL_Texture* texture, void* pixel
 	SDL_UnlockTexture(texture);
 }
 
+void RunSerialRGBShiftShader(SDL_Surface* loadedImage, SDL_Texture* texture, void* pixels, void* buffer, const float time)
+{
+	SDL_LockTexture(texture, NULL, &pixels, &loadedImage->pitch);
+
+	memcpy(buffer, pixels, loadedImage->pitch * loadedImage->h);
+	cl_char4 * output = (cl_char4 *)pixels;
+	cl_char4 * input = (cl_char4 *)buffer;
+
+	for (int x = 0; x < loadedImage->w; x++)
+	{
+		for (int y = 0; y < loadedImage->h; y++)
+		{
+			float xOffset = 0.04;
+			float yOffset = 0.02;
+
+			cl_char4 color;
+			float fragCoord[2] = { x / 256.0f, y / 256.0f };
+
+			xOffset = xOffset * sin(20.0f);
+			yOffset = yOffset * cos(20.0f);
+
+			float rFract[2] = { fragCoord[0] + xOffset, -fragCoord[1] + yOffset };
+			float rCoords[2] = { fmin(rFract[0] - floor(rFract[0]), 1.0f), fmin(rFract[1] - floor(rFract[1]), 1.0f) };
+			rCoords[0] = min(255.0f, rCoords[0] * 256.0f);
+			rCoords[1] = min(255.0f, rCoords[1] * 256.0f);
+			color.x = input[((int)(rCoords[0])) + (((int)(rCoords[1])) * loadedImage->w)].x;
+
+			float gFract[2] = { fragCoord[0] + 0.000, -fragCoord[1] };
+			float gCoords[2] = { fmin(gFract[0] - floor(gFract[0]), 1.0f), fmin(gFract[1] - floor(gFract[1]), 1.0f) };
+			gCoords[0] = min(255.0f, gCoords[0] * 256.0f);
+			gCoords[1] = min(255.0f, gCoords[1] * 256.0f);
+			color.y = input[((int)(gCoords[0])) + (((int)(gCoords[1])) * loadedImage->w)].y;
+
+			float bFract[2] = { fragCoord[0] - xOffset, -fragCoord[1] - yOffset };
+			float bCoords[2] = { fmin(bFract[0] - floor(bFract[0]), 1.0f), fmin(bFract[1] - floor(bFract[1]), 1.0f) };
+			bCoords[0] = min(255.0f, bCoords[0] * 256.0f);
+			bCoords[1] = min(255.0f, bCoords[1] * 256.0f);
+			color.z = input[((int)(bCoords[0])) + (((int)(bCoords[1])) * loadedImage->w)].z;
+
+			color.w = input[(int)x + ((int)y) * loadedImage->w].w;
+
+			output[x + (y * loadedImage->w)] = color;
+		}
+	}
+
+	SDL_UnlockTexture(texture);
+}
+
 void RunOpenCL(cl_kernel kernel,
 				cl_command_queue commandQueue,
 				size_t* globalWorkSize,
@@ -665,7 +713,7 @@ int main(int argc, char* argv[])
 
 	// Run Serially
 	timer.Start();
-	RunSerialWater(loadedImage, texture, pixels, buffer, time);
+	RunSerialRGBShiftShader(loadedImage, texture, pixels, buffer, time);
 	timer.End();
 	timer.Seconds(seconds);
 	std::cout << "Serially" << " ran in " << seconds << " seconds" << std::endl << std::endl;
