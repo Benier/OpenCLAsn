@@ -482,7 +482,7 @@ void RunOnTwoOpenCLDevice(cl_kernel deviceOneKernel,
 		return;
 	}
 
-	err = clEnqueueReadBuffer(deviceOneCommandQueue, outputBuffer, CL_TRUE,
+	err = clEnqueueReadBuffer(deviceOneCommandQueue, outputBuffer, CL_FALSE,
 		0, loadedImage->pitch * loadedImage->h, pixels,
 		0, NULL, NULL);
 
@@ -491,7 +491,7 @@ void RunOnTwoOpenCLDevice(cl_kernel deviceOneKernel,
 		return;
 	}
 
-	err = clEnqueueReadBuffer(deviceTwoCommandQueue, outputBuffer, CL_TRUE,
+	err = clEnqueueReadBuffer(deviceTwoCommandQueue, outputBuffer, CL_FALSE,
 		0, loadedImage->pitch * loadedImage->h, pixels,
 		0, NULL, NULL);
 
