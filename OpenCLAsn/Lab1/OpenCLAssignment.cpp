@@ -27,7 +27,7 @@
 
 #endif
 
-const int SCREEN_WIDTH = 1920;
+const int SCREEN_WIDTH = 1024;
 const int SCREEN_HEIGHT = 1024;
 
 char* CLErrorToString(cl_int error) {
@@ -482,7 +482,7 @@ void RunOnTwoOpenCLDevice(cl_kernel deviceOneKernel,
 		return;
 	}
 
-	err = clEnqueueReadBuffer(deviceOneCommandQueue, outputBuffer, CL_FALSE,
+	err = clEnqueueReadBuffer(deviceOneCommandQueue, outputBuffer, CL_TRUE,
 		0, loadedImage->pitch * loadedImage->h, pixels,
 		0, NULL, NULL);
 
@@ -491,7 +491,7 @@ void RunOnTwoOpenCLDevice(cl_kernel deviceOneKernel,
 		return;
 	}
 
-	err = clEnqueueReadBuffer(deviceTwoCommandQueue, outputBuffer, CL_FALSE,
+	err = clEnqueueReadBuffer(deviceTwoCommandQueue, outputBuffer, CL_TRUE,
 		0, loadedImage->pitch * loadedImage->h, pixels,
 		0, NULL, NULL);
 
@@ -643,15 +643,17 @@ int main(int argc, char* argv[])
 	int frames = 0;
 	char array[64];
 
-	bool openCLRunning = true;
-	char* type = openCLRunning ? "OpenCL" : "Serial";
-
 	// Run Serially
 	timer.Start();
 	RunSerialRGBShiftShader(loadedImage, texture, pixels, buffer, time);
 	timer.End();
 	timer.Seconds(seconds);
 	std::cout << "Serially" << " ran in " << seconds << " seconds" << std::endl << std::endl;
+
+	//Render serial result
+	SDL_RenderClear(renderer);
+	renderTexture(texture, renderer, 0, 0);
+	SDL_RenderPresent(renderer);
 
 	// Run CPU + GPU
 	size_t globalWorkSize[2] = { loadedImage->w, loadedImage->h / 2 };
@@ -661,6 +663,10 @@ int main(int argc, char* argv[])
 	timer.End();
 	timer.Seconds(seconds);
 	std::cout << "OpenCL GPU + CPU" << " ran in " << seconds << " seconds" << std::endl << std::endl;
+
+	//Render CPU + GPU result
+	renderTexture(texture, renderer, loadedImage->w, 0);
+	SDL_RenderPresent(renderer);
 
 	// Configure worker size and offsets to run entirely on a single device.
 	globalWorkSize[0] = loadedImage->w;
@@ -680,12 +686,20 @@ int main(int argc, char* argv[])
 	timer.Seconds(seconds);
 	std::cout << "OpenCL CPU" << " ran in " << seconds << " seconds" << std::endl << std::endl;
 
+	//Render CPU result
+	renderTexture(texture, renderer, 0, loadedImage->h);
+	SDL_RenderPresent(renderer);
+
 	// Run GPU
 	timer.Start();
 	RunOnSingleOpenCLDevice(gpuKernel, gpuCommandQueue, globalWorkSize, localWorkSize, outputBuffer, loadedImage, texture, pixels, time);
 	timer.End();
 	timer.Seconds(seconds);
 	std::cout << "OpenCL GPU" << " ran in " << seconds << " seconds" << std::endl << std::endl;
+
+	//Render GPU result
+	renderTexture(texture, renderer, loadedImage->w, loadedImage->h);
+	SDL_RenderPresent(renderer);
 
 	SDL_Event e;
 	bool quit = false;
@@ -695,10 +709,6 @@ int main(int argc, char* argv[])
 				quit = true;
 			}
 		}
-		//Render the scene
-		SDL_RenderClear(renderer);
-		renderTexture(texture, renderer, 0, 0);
-		SDL_RenderPresent(renderer);
 	}
 
 	SDL_FreeSurface(loadedImage);
